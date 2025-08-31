@@ -190,8 +190,7 @@ jobs:
             mcp__github_pulls__list_pull_request_files,
             mcp__github_pulls__get_pull_request_diff,
             mcp__github_ci__get_ci_status,
-            Bash,
-            Read,Grep,Glob,WebFetch,WebSearch,TodoWrite"
+            Bash,Read,Grep,Glob,WebFetch,WebSearch,TodoWrite"
           prompt: |
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ steps.extract-context.outputs.pr_number }}
