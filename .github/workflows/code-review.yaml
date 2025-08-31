@@ -294,7 +294,7 @@ jobs:
           - If they're requesting a change, evaluate and respond
           - Focus on the specific code context they're commenting on
           - Be concise and directly relevant to their comment
-          - Use the `mcp__github_inline_comment__create_inline_comment` tool to respond to the user"
+          - Use the 'mcp__github_inline_comment__create_inline_comment' tool to respond to the user"
           
           elif [[ "${{ steps.extract-comment.outputs.comment_type }}" == "pr_comment" ]]; then
             FULL_PROMPT="${BASE_CONTEXT}
