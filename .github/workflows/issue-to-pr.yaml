@@ -1,0 +1,273 @@
+---
+name: Issue to PR
+
+on:
+  issue_comment:
+    types: [created]
+  issues:
+    types: [opened]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  implement-issue:
+    runs-on: ubuntu-latest
+    # Only run if comment contains @claude-implement or issue is opened with implement label
+    if: |
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude-implement')) ||
+      (github.event_name == 'issues' && github.event.action == 'opened' && contains(github.event.issue.labels.*.name, 'claude-implement'))
+    
+    steps:
+      # Check permissions
+      - name: Check actor permissions
+        id: check-permissions
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PERMISSION=$(gh api repos/${{ github.repository }}/collaborators/${{ github.actor }}/permission --jq .permission 2>/dev/null || echo "none")
+          echo "Actor (${{ github.actor }}) has '${PERMISSION}' permission on this repository."
+          if [[ "$PERMISSION" == "admin" || "$PERMISSION" == "maintain" || "$PERMISSION" == "write" ]]; then
+            echo "is_authorized=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_authorized=false" >> $GITHUB_OUTPUT
+            echo "::error::Actor does not have write, maintain, or admin permissions on this repository"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.check-permissions.outputs.is_authorized == 'true'
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.FINN_DEVOPS_PERSONAL_ACCESS_TOKEN }}
+
+      # Configure GPG for signed commits
+      - name: Configure GPG and Git for Signed Commits
+        if: steps.check-permissions.outputs.is_authorized == 'true'
+        run: |
+          # Import GPG key
+          echo -n "${{ secrets.GPG_SIGNING_KEY }}" | base64 --decode > gpg.key
+          gpg --batch --yes --passphrase "${{ secrets.GPG_PASSPHRASE }}" --pinentry-mode loopback --import gpg.key
+          rm gpg.key
+
+          # Configure GPG
+          mkdir -p ~/.gnupg
+          cat <<EOF > ~/.gnupg/gpg.conf
+          use-agent
+          EOF
+
+          cat <<EOF > ~/.gnupg/gpg-agent.conf
+          allow-loopback-pinentry
+          EOF
+
+          gpg-connect-agent reloadagent /bye
+
+          # Configure Git
+          git config --global user.name "FINN DevOps"
+          git config --global user.email "devops@finn-services.com"
+          git config --global user.signingkey "${{ secrets.GPG_KEY_ID }}"
+          git config --global commit.gpgsign true
+          git config --global gpg.program gpg
+          
+          # Test GPG signing
+          echo "${{ secrets.GPG_PASSPHRASE }}" | gpg --batch --yes --passphrase-fd 0 --pinentry-mode loopback --sign -u ${{ secrets.GPG_KEY_ID }} -o /dev/null
+
+      # Extract issue details
+      - name: Extract issue details
+        id: extract-issue
+        if: steps.check-permissions.outputs.is_authorized == 'true'
+        run: |
+          ISSUE_NUMBER="${{ github.event.issue.number }}"
+          ISSUE_TITLE="${{ github.event.issue.title }}"
+          ISSUE_AUTHOR="${{ github.event.issue.user.login || github.event.comment.user.login }}"
+          
+          echo "issue_number=$ISSUE_NUMBER" >> $GITHUB_OUTPUT
+          echo "issue_title=$ISSUE_TITLE" >> $GITHUB_OUTPUT
+          echo "issue_author=$ISSUE_AUTHOR" >> $GITHUB_OUTPUT
+          
+          # Create branch name from issue title
+          BRANCH_NAME="claude/issue-${ISSUE_NUMBER}-$(echo "$ISSUE_TITLE" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//' | sed 's/-$//' | cut -c1-50)"
+          echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+          
+          echo "📋 Issue #$ISSUE_NUMBER: $ISSUE_TITLE"
+          echo "👤 Author: @$ISSUE_AUTHOR"
+          echo "🌿 Branch: $BRANCH_NAME"
+
+      # Create new branch
+      - name: Create implementation branch
+        id: create-branch
+        if: steps.check-permissions.outputs.is_authorized == 'true'
+        run: |
+          BRANCH_NAME="${{ steps.extract-issue.outputs.branch_name }}"
+          
+          # Create and checkout new branch
+          git checkout -b "$BRANCH_NAME"
+          
+          echo "✅ Created branch: $BRANCH_NAME"
+
+      # Post initial comment
+      - name: Post starting comment
+        if: steps.check-permissions.outputs.is_authorized == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue comment ${{ steps.extract-issue.outputs.issue_number }} --body "🤖 **Claude is implementing this issue**
+
+          I'm now working on implementing the requirements from this issue. I'll:
+          1. Analyze the requirements
+          2. Implement the solution
+          3. Create tests if applicable
+          4. Open a PR when complete
+
+          Branch: \`${{ steps.extract-issue.outputs.branch_name }}\`
+          
+          _This is an automated implementation by Claude Opus 4.1_"
+
+      # Run Claude to implement the issue
+      - uses: anthropics/claude-code-action@v1
+        if: steps.check-permissions.outputs.is_authorized == 'true'
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          track_progress: true
+          claude_args: |
+            --model claude-opus-4-1-20250805
+            --allowedTools "mcp__github__add_comment_to_pending_review,
+            mcp__github__add_pull_request_review_comment,
+            mcp__github__create_issue,
+            mcp__github__create_issue_comment,
+            mcp__github__create_or_update_file,
+            mcp__github__create_pending_pull_request_review,
+            mcp__github__create_pr,
+            mcp__github__delete_file,
+            mcp__github__get_file_contents,
+            mcp__github__get_issue,
+            mcp__github__get_issue_comments,
+            mcp__github__get_pull_request_diff,
+            mcp__github__list_issues,
+            mcp__github__search_issues,
+            mcp__github__submit_pending_pull_request_review,
+            mcp__github__update_issue,
+            mcp__github_ci__download_job_log,
+            mcp__github_ci__get_ci_status,
+            mcp__github_ci__get_workflow_run_details,
+            mcp__github_comment__update,
+            mcp__github_comment__update_claude_comment,
+            mcp__github_file_ops__commit_files,
+            mcp__github_file_ops__delete_files,
+            mcp__github_inline_comment__create_inline_comment,
+            Bash,Read,Write,Edit,MultiEdit,Grep,Glob,WebFetch,WebSearch,TodoWrite"
+          prompt: |
+            REPO: ${{ github.repository }}
+            ISSUE NUMBER: ${{ steps.extract-issue.outputs.issue_number }}
+            
+            ## Task: Implement GitHub Issue
+            
+            You need to implement the solution for issue #${{ steps.extract-issue.outputs.issue_number }}.
+            
+            ### Instructions:
+            
+            1. **Read the issue**: Use mcp__github_issues__get_issue to understand the requirements
+            2. **Review comments**: Use mcp__github_issues__list_issue_comments if there are clarifications
+            3. **Plan the implementation**: Break down the task into steps
+            4. **Implement the solution**: Write the necessary code changes
+            5. **Test your changes**: Run existing tests and add new ones if needed
+            6. **Commit your changes**: 
+               - Create atomic, well-described commits
+               - Use conventional commit format (feat:, fix:, docs:, etc.)
+               - Reference the issue number in commit messages
+               - IMPORTANT: Git is already configured for GPG signing, just use regular git commit
+            7. **Push the branch**: Push your implementation branch
+            8. **Create a PR**: 
+               - Use gh pr create with a clear title and description
+               - Reference "Fixes #${{ steps.extract-issue.outputs.issue_number }}"
+               - List the changes made
+               - Include test instructions
+            
+            ### Important Notes:
+            - Focus on clean, maintainable code
+            - Follow existing code patterns and conventions
+            - Add appropriate error handling
+            - Update documentation if needed
+            - Git and GPG signing are already configured - just commit normally
+            
+            IMPORTANT: After implementing, you MUST:
+            1. Commit all changes
+            2. Push the branch
+            3. Create a PR using gh pr create
+
+      # Fallback: Push branch if Claude didn't
+      - name: Ensure branch is pushed
+        if: steps.check-permissions.outputs.is_authorized == 'true'
+        continue-on-error: true
+        run: |
+          # Check if there are uncommitted changes
+          if [[ -n $(git status --porcelain) ]]; then
+            echo "⚠️ Found uncommitted changes, committing them"
+            git add -A
+            echo "${{ secrets.GPG_PASSPHRASE }}" | gpg --batch --yes --passphrase-fd 0 --pinentry-mode loopback -u ${{ secrets.GPG_KEY_ID }} --sign --detach-sign <(echo "test")
+            git commit -m "feat: implement issue #${{ steps.extract-issue.outputs.issue_number }}
+
+            Automated implementation by Claude
+
+            Fixes #${{ steps.extract-issue.outputs.issue_number }}"
+          fi
+          
+          # Push the branch
+          git push -u origin "${{ steps.extract-issue.outputs.branch_name }}" || echo "Branch already pushed"
+
+      # Create PR if not already created
+      - name: Create PR if needed
+        if: steps.check-permissions.outputs.is_authorized == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.FINN_DEVOPS_PERSONAL_ACCESS_TOKEN }}
+        continue-on-error: true
+        run: |
+          # Check if PR already exists
+          EXISTING_PR=$(gh pr list --head "${{ steps.extract-issue.outputs.branch_name }}" --json number --jq '.[0].number' || echo "")
+          
+          if [[ -z "$EXISTING_PR" ]]; then
+            echo "Creating PR..."
+            PR_BODY="## Summary
+            
+            This PR implements the requirements from issue #${{ steps.extract-issue.outputs.issue_number }}.
+            
+            ## Changes
+            - Automated implementation by Claude Opus 4.1
+            
+            ## Testing
+            - Please review the implementation
+            - Run existing tests
+            - Verify the requirements are met
+            
+            Fixes #${{ steps.extract-issue.outputs.issue_number }}"
+            
+            gh pr create \
+              --title "feat: ${{ steps.extract-issue.outputs.issue_title }}" \
+              --body "$PR_BODY" \
+              --base main \
+              --head "${{ steps.extract-issue.outputs.branch_name }}"
+          else
+            echo "PR #$EXISTING_PR already exists"
+          fi
+
+      # Post completion comment
+      - name: Post completion comment
+        if: steps.check-permissions.outputs.is_authorized == 'true' && always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [[ "${{ job.status }}" == "success" ]]; then
+            gh issue comment ${{ steps.extract-issue.outputs.issue_number }} --body "✅ **Implementation complete!**
+            
+            Claude has finished implementing this issue. Please review the pull request.
+            
+            Branch: \`${{ steps.extract-issue.outputs.branch_name }}\`"
+          else
+            gh issue comment ${{ steps.extract-issue.outputs.issue_number }} --body "⚠️ **Implementation encountered issues**
+            
+            The automated implementation process encountered some problems. Please check the [workflow logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details.
+            
+            Branch: \`${{ steps.extract-issue.outputs.branch_name }}\`"
+          fi
