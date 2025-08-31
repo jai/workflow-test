@@ -226,12 +226,15 @@ jobs:
                - Create atomic, well-described commits
                - Use conventional commit format (feat:, fix:, docs:, etc.)
                - Reference the issue number in commit messages
-            7. **Push the branch**: Push your implementation branch
+            7. **Push the branch**: Push your implementation branch using git push
             8. **Create a PR**: 
-               - Use gh pr create with a clear title and description
-               - Reference "Fixes #${{ steps.extract-issue.outputs.issue_number }}"
+               - Use the mcp__github__create_pr tool to create the pull request
+               - Set the title to describe the feature/fix
+               - In the body, reference "Fixes #${{ steps.extract-issue.outputs.issue_number }}"
                - List the changes made
                - Include test instructions
+               - Set base branch to "master" or "main"
+               - Set head branch to your implementation branch
             
             ### Important Notes:
             - Focus on clean, maintainable code
@@ -240,9 +243,9 @@ jobs:
             - Update documentation if needed
             
             IMPORTANT: After implementing, you MUST:
-            1. Commit all changes
-            2. Push the branch
-            3. Create a PR using gh pr create
+            1. Commit all changes using git commit
+            2. Push the branch using git push
+            3. Create a PR using mcp__github__create_pr tool (NOT gh pr create - that won't work with GitHub Actions token)
 
       # Fallback: Push branch if Claude didn't
       - name: Ensure branch is pushed
@@ -264,39 +267,25 @@ jobs:
           # Push the branch
           git push -u origin "${{ steps.extract-issue.outputs.branch_name }}" || echo "Branch already pushed"
 
-      # Create PR if not already created
-      - name: Create PR if needed
+      # Check if PR was created
+      - name: Check for PR
         if: steps.check-permissions.outputs.is_authorized == 'true'
         env:
-          GH_TOKEN: ${{ secrets.FINN_DEVOPS_PERSONAL_ACCESS_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         continue-on-error: true
         run: |
+          # Give Claude a moment to create the PR
+          sleep 5
+          
           # Check if PR already exists
           EXISTING_PR=$(gh pr list --head "${{ steps.extract-issue.outputs.branch_name }}" --json number --jq '.[0].number' || echo "")
           
           if [[ -z "$EXISTING_PR" ]]; then
-            echo "Creating PR..."
-            PR_BODY="## Summary
-            
-            This PR implements the requirements from issue #${{ steps.extract-issue.outputs.issue_number }}.
-            
-            ## Changes
-            - Automated implementation by Claude Opus 4.1
-            
-            ## Testing
-            - Please review the implementation
-            - Run existing tests
-            - Verify the requirements are met
-            
-            Fixes #${{ steps.extract-issue.outputs.issue_number }}"
-            
-            gh pr create \
-              --title "feat: ${{ steps.extract-issue.outputs.issue_title }}" \
-              --body "$PR_BODY" \
-              --base main \
-              --head "${{ steps.extract-issue.outputs.branch_name }}"
+            echo "⚠️ No PR was created. Claude may have encountered an issue."
+            echo "Branch ${{ steps.extract-issue.outputs.branch_name }} exists but no PR was opened."
+            echo "You may need to create the PR manually."
           else
-            echo "PR #$EXISTING_PR already exists"
+            echo "✅ PR #$EXISTING_PR was created successfully"
           fi
 
       # Post completion comment
