@@ -42,26 +42,33 @@ jobs:
       # Extract PR number based on event type
       - name: Extract PR number
         id: extract-pr
+        if: steps.check-permissions.outputs.is_authorized == 'true'
         shell: bash
         run: |
           set -euo pipefail
           echo "Event: ${{ github.event_name }}"
-          
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             PR_NUMBER="${{ github.event.pull_request.number }}"
             echo "📋 PR number from pull_request event: $PR_NUMBER"
           elif [[ "${{ github.event_name }}" == "issue_comment" ]]; then
             # For issue_comment events on PRs, the PR number is in issue.number
-            PR_NUMBER="${{ github.event.issue.number }}"
-            echo "💬 PR number from issue_comment event: $PR_NUMBER"
+            # Verify this is actually a PR comment, not an issue comment
+            # GitHub provides pull_request object only for PR comments
+            if [[ "${{ github.event.issue.pull_request }}" != "" ]]; then
+              PR_NUMBER="${{ github.event.issue.number }}"
+              echo "💬 PR number from issue_comment event: $PR_NUMBER"
+            else
+              echo "⚠️ Issue comment is not on a PR, skipping"
+              exit 0
+            fi
           elif [[ "${{ github.event_name }}" == "pull_request_review_comment" ]]; then
             PR_NUMBER="${{ github.event.pull_request.number }}"
             echo "📝 PR number from pull_request_review_comment event: $PR_NUMBER"
           else
-            PR_NUMBER=""
             echo "⚠️ Could not determine PR number for event: ${{ github.event_name }}"
+            echo "::error::Unsupported event type: ${{ github.event_name }}"
+            exit 1
           fi
-          
           echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
           echo "✅ Using PR number: $PR_NUMBER"
 
