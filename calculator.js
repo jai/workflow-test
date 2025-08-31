@@ -29,6 +29,19 @@ class Calculator {
     clearHistory() {
         this.history = [];
     }
+
+    pow(base, exponent) {
+        // Handle edge case: 0^0 returns 1 as per mathematical convention
+        if (base === 0 && exponent === 0) {
+            const result = 1;
+            this.history.push(`${base} ^ ${exponent} = ${result}`);
+            return result;
+        }
+        
+        const result = Math.pow(base, exponent);
+        this.history.push(`${base} ^ ${exponent} = ${result}`);
+        return result;
+    }
 }
 
 // Example usage
