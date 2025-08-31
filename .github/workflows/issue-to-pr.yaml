@@ -41,46 +41,49 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Configure Git (GPG signing optional)
+      # Configure Git (minimal setup - let Claude handle the rest)
       - name: Configure Git
         if: steps.check-permissions.outputs.is_authorized == 'true'
         run: |
-          # Configure Git user
+          # Configure basic Git user
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
           
-          # Check if GPG secrets are available
-          if [[ -n "${{ secrets.GPG_SIGNING_KEY }}" ]] && [[ -n "${{ secrets.GPG_PASSPHRASE }}" ]] && [[ -n "${{ secrets.GPG_KEY_ID }}" ]]; then
-            echo "🔐 GPG secrets found, configuring signed commits"
-            
-            # Import GPG key
-            echo -n "${{ secrets.GPG_SIGNING_KEY }}" | base64 --decode > gpg.key
-            gpg --batch --yes --passphrase "${{ secrets.GPG_PASSPHRASE }}" --pinentry-mode loopback --import gpg.key
-            rm gpg.key
-
-            # Configure GPG
-            mkdir -p ~/.gnupg
-            cat <<EOF > ~/.gnupg/gpg.conf
-use-agent
-EOF
-
-            cat <<EOF > ~/.gnupg/gpg-agent.conf
-allow-loopback-pinentry
-EOF
-
-            gpg-connect-agent reloadagent /bye
-
-            # Configure Git for signing
-            git config --global user.signingkey "${{ secrets.GPG_KEY_ID }}"
-            git config --global commit.gpgsign true
-            git config --global gpg.program gpg
-            
-            # Test GPG signing
-            echo "${{ secrets.GPG_PASSPHRASE }}" | gpg --batch --yes --passphrase-fd 0 --pinentry-mode loopback --sign -u ${{ secrets.GPG_KEY_ID }} -o /dev/null
-          else
-            echo "⚠️ GPG secrets not configured, commits will not be signed"
-            git config --global commit.gpgsign false
-          fi
+          # # Commenting out commit signing setup - let's see what Claude does
+          # # Check if GPG secrets are available
+          # if [[ -n "${{ secrets.GPG_SIGNING_KEY }}" ]] && [[ -n "${{ secrets.GPG_PASSPHRASE }}" ]] && [[ -n "${{ secrets.GPG_KEY_ID }}" ]]; then
+          #   echo "🔐 GPG secrets found, configuring signed commits"
+          #   
+          #   # Import GPG key
+          #   echo -n "${{ secrets.GPG_SIGNING_KEY }}" | base64 --decode > gpg.key
+          #   gpg --batch --yes --passphrase "${{ secrets.GPG_PASSPHRASE }}" --pinentry-mode loopback --import gpg.key
+          #   rm gpg.key
+          #
+          #   # Configure GPG
+          #   mkdir -p ~/.gnupg
+          #   cat <<EOF > ~/.gnupg/gpg.conf
+          # use-agent
+          # EOF
+          #
+          #   cat <<EOF > ~/.gnupg/gpg-agent.conf
+          # allow-loopback-pinentry
+          # EOF
+          #
+          #   gpg-connect-agent reloadagent /bye
+          #
+          #   # Configure Git for signing
+          #   git config --global user.signingkey "${{ secrets.GPG_KEY_ID }}"
+          #   git config --global commit.gpgsign true
+          #   git config --global gpg.program gpg
+          #   
+          #   # Test GPG signing
+          #   echo "${{ secrets.GPG_PASSPHRASE }}" | gpg --batch --yes --passphrase-fd 0 --pinentry-mode loopback --sign -u ${{ secrets.GPG_KEY_ID }} -o /dev/null
+          # else
+          #   echo "⚠️ GPG secrets not configured, commits will not be signed"
+          #   git config --global commit.gpgsign false
+          # fi
+          
+          echo "✅ Basic Git configuration complete"
 
       # Extract issue details
       - name: Extract issue details
@@ -194,7 +197,6 @@ EOF
                - Create atomic, well-described commits
                - Use conventional commit format (feat:, fix:, docs:, etc.)
                - Reference the issue number in commit messages
-               - IMPORTANT: Git is already configured for GPG signing, just use regular git commit
             7. **Push the branch**: Push your implementation branch
             8. **Create a PR**: 
                - Use gh pr create with a clear title and description
@@ -207,7 +209,6 @@ EOF
             - Follow existing code patterns and conventions
             - Add appropriate error handling
             - Update documentation if needed
-            - Git and GPG signing are already configured - just commit normally
             
             IMPORTANT: After implementing, you MUST:
             1. Commit all changes
