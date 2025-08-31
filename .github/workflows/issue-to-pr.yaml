@@ -41,36 +41,46 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Configure GPG for signed commits
-      - name: Configure GPG and Git for Signed Commits
+      # Configure Git (GPG signing optional)
+      - name: Configure Git
         if: steps.check-permissions.outputs.is_authorized == 'true'
         run: |
-          # Import GPG key
-          echo -n "${{ secrets.GPG_SIGNING_KEY }}" | base64 --decode > gpg.key
-          gpg --batch --yes --passphrase "${{ secrets.GPG_PASSPHRASE }}" --pinentry-mode loopback --import gpg.key
-          rm gpg.key
-
-          # Configure GPG
-          mkdir -p ~/.gnupg
-          cat <<EOF > ~/.gnupg/gpg.conf
-          use-agent
-          EOF
-
-          cat <<EOF > ~/.gnupg/gpg-agent.conf
-          allow-loopback-pinentry
-          EOF
-
-          gpg-connect-agent reloadagent /bye
-
-          # Configure Git
-          git config --global user.name "FINN DevOps"
-          git config --global user.email "devops@finn-services.com"
-          git config --global user.signingkey "${{ secrets.GPG_KEY_ID }}"
-          git config --global commit.gpgsign true
-          git config --global gpg.program gpg
+          # Configure Git user
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
           
-          # Test GPG signing
-          echo "${{ secrets.GPG_PASSPHRASE }}" | gpg --batch --yes --passphrase-fd 0 --pinentry-mode loopback --sign -u ${{ secrets.GPG_KEY_ID }} -o /dev/null
+          # Check if GPG secrets are available
+          if [[ -n "${{ secrets.GPG_SIGNING_KEY }}" ]] && [[ -n "${{ secrets.GPG_PASSPHRASE }}" ]] && [[ -n "${{ secrets.GPG_KEY_ID }}" ]]; then
+            echo "🔐 GPG secrets found, configuring signed commits"
+            
+            # Import GPG key
+            echo -n "${{ secrets.GPG_SIGNING_KEY }}" | base64 --decode > gpg.key
+            gpg --batch --yes --passphrase "${{ secrets.GPG_PASSPHRASE }}" --pinentry-mode loopback --import gpg.key
+            rm gpg.key
+
+            # Configure GPG
+            mkdir -p ~/.gnupg
+            cat <<EOF > ~/.gnupg/gpg.conf
+            use-agent
+            EOF
+
+            cat <<EOF > ~/.gnupg/gpg-agent.conf
+            allow-loopback-pinentry
+            EOF
+
+            gpg-connect-agent reloadagent /bye
+
+            # Configure Git for signing
+            git config --global user.signingkey "${{ secrets.GPG_KEY_ID }}"
+            git config --global commit.gpgsign true
+            git config --global gpg.program gpg
+            
+            # Test GPG signing
+            echo "${{ secrets.GPG_PASSPHRASE }}" | gpg --batch --yes --passphrase-fd 0 --pinentry-mode loopback --sign -u ${{ secrets.GPG_KEY_ID }} -o /dev/null
+          else
+            echo "⚠️ GPG secrets not configured, commits will not be signed"
+            git config --global commit.gpgsign false
+          fi
 
       # Extract issue details
       - name: Extract issue details
@@ -138,7 +148,6 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           track_progress: true
-          use_commit_signing: true
           claude_args: |
             --model claude-opus-4-1-20250805
             --allowedTools "mcp__github__add_comment_to_pending_review,
