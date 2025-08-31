@@ -1,0 +1,14 @@
+## PR Creation Status
+
+The implementation has been completed successfully and pushed to the branch `claude/issue-20-add-a-square-root-function-to-calculator`.
+
+However, GitHub Actions doesn't have permission to create pull requests directly. The changes have been:
+- ✅ Implemented
+- ✅ Tested (all 7 tests passing)
+- ✅ Committed
+- ✅ Pushed to branch
+
+The pull request needs to be created manually or through a different mechanism.
+
+Branch: `claude/issue-20-add-a-square-root-function-to-calculator`
+Latest commit: `0b290ed`

@@ -1,0 +1,7 @@
+{
+  "branch": "claude/issue-20-add-a-square-root-function-to-calculator",
+  "base": "master",
+  "title": "feat: add square root function to Calculator class",
+  "body": "Fixes #20\n\n## Summary\nThis PR adds a square root function to the Calculator class.\n\n### Changes Made:\n- Added sqrt() method to Calculator class\n- Handles negative numbers by returning NaN\n- Added comprehensive test suite with 7 test cases\n- All tests passing",
+  "issue": 20
+}
