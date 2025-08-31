@@ -7,7 +7,7 @@ on:
   pull_request_review_comment:
     types: [created]
   pull_request:
-    types: [ready_for_review]
+    types: [opened, reopened, ready_for_review]
 
 permissions:
   contents: read
@@ -16,11 +16,59 @@ permissions:
   actions: read
 
 jobs:
+  # Job to post welcome message when PR is opened
+  welcome:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && (github.event.action == 'opened' || github.event.action == 'reopened')
+    steps:
+      - name: Check for existing welcome message
+        id: check-welcome
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Check if we already posted a welcome message
+          WELCOME_EXISTS=$(gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments \
+            --jq '[.[] | select(.body | contains("🤖 **Code Review Assistant**"))] | length')
+          
+          if [[ "$WELCOME_EXISTS" -gt 0 ]]; then
+            echo "found=true" >> $GITHUB_OUTPUT
+            echo "✅ Welcome message already exists"
+          else
+            echo "found=false" >> $GITHUB_OUTPUT
+            echo "📝 Need to post welcome message"
+          fi
+
+      - name: Post welcome message
+        if: steps.check-welcome.outputs.found == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr comment ${{ github.event.pull_request.number }} --body "$(cat <<'EOF'
+          🤖 **Code Review Assistant**
+          
+          Welcome! This PR has access to AI-powered code reviews using **Claude Opus 4.1** - Anthropic's most powerful coding model.
+          
+          **How to trigger a review:**
+          - 🚀 Mark your PR as "Ready for review" from draft status
+          - 💬 Tag `@claude` in any comment to ask questions or request a review
+          - 📝 Reply to inline code comments with `@claude` for specific feedback
+          
+          **What I can help with:**
+          - Comprehensive code reviews (security, performance, best practices)
+          - Answer specific technical questions
+          - Suggest improvements and fixes
+          - Review test coverage and documentation
+          
+          _Note: Only users with write, maintain, or admin permissions can trigger reviews._
+          EOF
+          )"
+
+  # Main review job
   review:
     runs-on: ubuntu-latest
     # Only run if this is a PR ready for review, or if comment mentions @claude
     if: |
-      github.event_name == 'pull_request' ||
+      github.event_name == 'pull_request' && github.event.action == 'ready_for_review' ||
       (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
       (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude'))
     steps:
@@ -45,23 +93,34 @@ jobs:
           fetch-depth: 0
 
       # Extract PR number based on event type
-      - name: Extract PR number
-        id: extract-pr
+      - name: Extract PR number and context
+        id: extract-context
         if: steps.check-permissions.outputs.is_authorized == 'true'
         shell: bash
         run: |
           set -euo pipefail
           echo "Event: ${{ github.event_name }}"
+          
+          # Extract PR number
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             PR_NUMBER="${{ github.event.pull_request.number }}"
             echo "📋 PR number from pull_request event: $PR_NUMBER"
+            CONTEXT_TYPE="full_review"
+            COMMENT_BODY=""
           elif [[ "${{ github.event_name }}" == "issue_comment" ]]; then
             # For issue_comment events on PRs, the PR number is in issue.number
             # Verify this is actually a PR comment, not an issue comment
-            # GitHub provides pull_request object only for PR comments
             if [[ "${{ github.event.issue.pull_request }}" != "" ]]; then
               PR_NUMBER="${{ github.event.issue.number }}"
               echo "💬 PR number from issue_comment event: $PR_NUMBER"
+              COMMENT_BODY="${{ github.event.comment.body }}"
+              
+              # Determine if this is a review request or a specific question
+              if echo "$COMMENT_BODY" | grep -iE "review|check this|review this pr|full review" > /dev/null; then
+                CONTEXT_TYPE="full_review"
+              else
+                CONTEXT_TYPE="specific_question"
+              fi
             else
               echo "⚠️ Issue comment is not on a PR, skipping"
               echo "::notice::Skipping: Comment is on an issue, not a pull request"
@@ -70,13 +129,20 @@ jobs:
           elif [[ "${{ github.event_name }}" == "pull_request_review_comment" ]]; then
             PR_NUMBER="${{ github.event.pull_request.number }}"
             echo "📝 PR number from pull_request_review_comment event: $PR_NUMBER"
+            COMMENT_BODY="${{ github.event.comment.body }}"
+            CONTEXT_TYPE="inline_comment"
           else
             echo "⚠️ Could not determine PR number for event: ${{ github.event_name }}"
             echo "::error::Unsupported event type: ${{ github.event_name }}"
             exit 1
           fi
+          
           echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
-          echo "✅ Using PR number: $PR_NUMBER"
+          echo "context_type=$CONTEXT_TYPE" >> $GITHUB_OUTPUT
+          echo "comment_body<<EOF" >> $GITHUB_OUTPUT
+          echo "$COMMENT_BODY" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "✅ Using PR number: $PR_NUMBER, Context: $CONTEXT_TYPE"
 
       # Determine if track_progress is supported for this event/action combination
       - name: Check track_progress support
@@ -124,40 +190,70 @@ jobs:
             Bash(gh pr comment:*),Bash(gh pr review comment:*),
             Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr checks:*),
             Bash(gh issue comment:*),Bash(gh issue view:*),
+            Bash(gh api:*),
             Read,Grep,Glob,WebFetch,WebSearch,TodoWrite"
           prompt: |
             REPO: ${{ github.repository }}
-            PR NUMBER: ${{ steps.extract-pr.outputs.pr_number }}
-
-            Ultrathink: Perform a comprehensive, deep-analysis code review with the following focus areas:
-
+            PR NUMBER: ${{ steps.extract-context.outputs.pr_number }}
+            CONTEXT TYPE: ${{ steps.extract-context.outputs.context_type }}
+            
+            # IMPORTANT: Read this context first
+            
+            You are Claude Opus 4.1, an AI code review assistant. Your response should be based on the context type:
+            
+            ## Context: ${{ steps.extract-context.outputs.context_type }}
+            
+            ${{ steps.extract-context.outputs.context_type == 'full_review' && 
+            'This is a FULL REVIEW request. Perform a comprehensive code review.' || 
+            steps.extract-context.outputs.context_type == 'inline_comment' && 
+            'This is an INLINE COMMENT. Someone is asking about specific code. Answer their question directly.' ||
+            'This is a SPECIFIC QUESTION. Answer only what was asked, do not perform a full review.' }}
+            
+            ## User's Message/Comment:
+            ${{ steps.extract-context.outputs.comment_body }}
+            
+            ---
+            
+            # Instructions based on context:
+            
+            ${{ steps.extract-context.outputs.context_type == 'full_review' && 
+            '## Perform a COMPREHENSIVE CODE REVIEW
+            
+            Focus on these areas:
+            
             1. **Code Quality**
                - Clean code principles and best practices
                - Proper error handling and edge cases
                - Code readability and maintainability
-
+            
             2. **Security**
                - Check for potential security vulnerabilities
                - Validate input sanitization
                - Review authentication/authorization logic
-
+            
             3. **Performance**
                - Identify potential performance bottlenecks
                - Review database queries for efficiency
                - Check for memory leaks or resource issues
-
+            
             4. **Testing**
                - Verify adequate test coverage
                - Review test quality and edge cases
                - Check for missing test scenarios
-
+            
             5. **Documentation**
                - Ensure code is properly documented
                - Verify README updates for new features
                - Check API documentation accuracy
-
+            
             Use inline comments ONLY for issues that need to be fixed or changed.
             Do NOT leave inline comments for praise or positive observations.
-            Avoid general observations, praise, or summary. If necessary, add them into the main code review and not in code review/inline comments.
-
-            Don't forget to post the final review using 'gh pr comment'
+            Post a final summary review using gh pr comment.' ||
+            '## Answer the specific question or comment
+            
+            1. Focus ONLY on what was asked
+            2. Be direct and concise
+            3. Do NOT perform a full code review unless explicitly requested
+            4. If the comment contains a question, answer it directly
+            5. If asking about specific code, provide focused feedback on just that code
+            6. Use gh pr comment or reply to the thread as appropriate' }}
