@@ -331,7 +331,10 @@ jobs:
           - If they're requesting a specific action, perform it
           - Use your judgment to determine their intent from the comment
           - If they're asking for a code review or to check the PR, then:
-            ${REVIEW_INSTRUCTIONS}"
+            ${REVIEW_INSTRUCTIONS}
+          
+          IMPORTANT: To respond to this PR comment, use:
+          gh pr comment ${{ steps.extract-pr.outputs.pr_number }} --body 'Your response here'"
           
           else
             # PR marked ready for review - always do full review
@@ -392,6 +395,5 @@ jobs:
             mcp__github_pulls__list_pull_request_files,
             mcp__github_pulls__get_pull_request_diff,
             mcp__github_ci__get_ci_status,
-            mcp__github_comment__update_claude_comment,
             Bash,Read,Grep,Glob,WebFetch,WebSearch,TodoWrite"
           prompt: ${{ steps.craft-prompt.outputs.prompt }}
