@@ -21,6 +21,8 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request' && (github.event.action == 'opened' || github.event.action == 'reopened')
     steps:
+      - uses: actions/checkout@v4
+      
       - name: Check for existing welcome message
         id: check-welcome
         env:
