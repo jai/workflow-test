@@ -61,12 +61,12 @@ jobs:
             # Configure GPG
             mkdir -p ~/.gnupg
             cat <<EOF > ~/.gnupg/gpg.conf
-            use-agent
-            EOF
+use-agent
+EOF
 
             cat <<EOF > ~/.gnupg/gpg-agent.conf
-            allow-loopback-pinentry
-            EOF
+allow-loopback-pinentry
+EOF
 
             gpg-connect-agent reloadagent /bye
 
@@ -271,20 +271,21 @@ jobs:
 
       # Post completion comment
       - name: Post completion comment
-        if: steps.check-permissions.outputs.is_authorized == 'true' && always()
+        if: always()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # Use github.event.issue.number which is available for both issue and issue_comment events
+          ISSUE_NUMBER="${{ github.event.issue.number }}"
+          
           if [[ "${{ job.status }}" == "success" ]]; then
-            gh issue comment ${{ steps.extract-issue.outputs.issue_number }} --body "✅ **Implementation complete!**
+            gh issue comment $ISSUE_NUMBER --body "✅ **Implementation complete!**
             
             Claude has finished implementing this issue. Please review the pull request.
             
             Branch: \`${{ steps.extract-issue.outputs.branch_name }}\`"
           else
-            gh issue comment ${{ steps.extract-issue.outputs.issue_number }} --body "⚠️ **Implementation encountered issues**
+            gh issue comment $ISSUE_NUMBER --body "⚠️ **Implementation encountered issues**
             
-            The automated implementation process encountered some problems. Please check the [workflow logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details.
-            
-            Branch: \`${{ steps.extract-issue.outputs.branch_name }}\`"
+            The automated implementation process encountered some problems. Please check the [workflow logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details."
           fi
