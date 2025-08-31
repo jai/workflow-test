@@ -18,6 +18,11 @@ permissions:
 jobs:
   review:
     runs-on: ubuntu-latest
+    # Only run if this is a PR ready for review, or if comment mentions @claude
+    if: |
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude'))
     steps:
       # Check if the actor has write or admin permissions on the repository
       - name: Check actor permissions
