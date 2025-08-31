@@ -193,44 +193,14 @@ jobs:
             1. Implement the solution for issue #${{ steps.extract-issue.outputs.issue_number }}
             2. Commit your changes (git add -A && git commit -m 'your message')
             3. Push changes (git push)
-            4. CREATE THE PULL REQUEST using one of these methods:
+            4. CREATE THE PULL REQUEST using gh CLI (THIS IS MANDATORY):
+               gh pr create --title 'feat: Description of what you implemented' --body 'Fixes #${{ steps.extract-issue.outputs.issue_number }}' --base master --head ${{ steps.extract-issue.outputs.branch_name }}
                
-               Method A (preferred): Use mcp__github__create_pr tool:
-               - title: 'feat: Description of what you implemented'
-               - body: 'Fixes #${{ steps.extract-issue.outputs.issue_number }}\n\nSummary of changes...'
-               - base: 'master'
-               - head: '${{ steps.extract-issue.outputs.branch_name }}'
-               
-               Method B (if Method A fails): Use gh CLI:
-               gh pr create --title 'feat: Description' --body 'Fixes #${{ steps.extract-issue.outputs.issue_number }}' --base master --head ${{ steps.extract-issue.outputs.branch_name }}
+               The gh CLI is available and has the necessary permissions. You MUST use it to create a PR.
             
             IMPORTANT: The branch '${{ steps.extract-issue.outputs.branch_name }}' already exists and you are on it. Do NOT create a new branch.
             IMPORTANT: You MUST create a PR. This is not optional. The task is not complete without a PR."
-            --allowedTools "mcp__github__add_comment_to_pending_review,
-            mcp__github__add_pull_request_review_comment,
-            mcp__github__create_issue,
-            mcp__github__create_issue_comment,
-            mcp__github__create_or_update_file,
-            mcp__github__create_pending_pull_request_review,
-            mcp__github__create_pr,
-            mcp__github__delete_file,
-            mcp__github__get_file_contents,
-            mcp__github__get_issue,
-            mcp__github__get_issue_comments,
-            mcp__github__get_pull_request_diff,
-            mcp__github__list_issues,
-            mcp__github__search_issues,
-            mcp__github__submit_pending_pull_request_review,
-            mcp__github__update_issue,
-            mcp__github_ci__download_job_log,
-            mcp__github_ci__get_ci_status,
-            mcp__github_ci__get_workflow_run_details,
-            mcp__github_comment__update,
-            mcp__github_comment__update_claude_comment,
-            mcp__github_file_ops__commit_files,
-            mcp__github_file_ops__delete_files,
-            mcp__github_inline_comment__create_inline_comment,
-            Bash,Read,Write,Edit,MultiEdit,Grep,Glob,WebFetch,WebSearch,TodoWrite"
+            --allowedTools "Bash,Read,Write,Edit,MultiEdit,Grep,Glob,WebFetch,WebSearch,TodoWrite"
           prompt: |
             REPO: ${{ github.repository }}
             ISSUE NUMBER: ${{ steps.extract-issue.outputs.issue_number }}
@@ -260,15 +230,10 @@ jobs:
                - The branch "${{ steps.extract-issue.outputs.branch_name }}" has already been created for you
             
             4. **Create the Pull Request** (MANDATORY):
-               YOU MUST create a pull request. Try these methods in order:
+               YOU MUST create a pull request using the gh CLI command:
+               gh pr create --title "feat: [clear description]" --body "Fixes #${{ steps.extract-issue.outputs.issue_number }}\n\n## Summary\n[Your summary here]" --base master --head ${{ steps.extract-issue.outputs.branch_name }}
                
-               a) First try: mcp__github__create_pr tool with:
-                  - title: "feat: Clear description of what you implemented"
-                  - body: "Fixes #${{ steps.extract-issue.outputs.issue_number }}\n\n## Summary\n[Your summary here]"
-                  - base: "master"
-                  - head: "${{ steps.extract-issue.outputs.branch_name }}"
-               
-               b) If that fails, use: gh pr create --title "feat: [description]" --body "Fixes #${{ steps.extract-issue.outputs.issue_number }}" --base master --head ${{ steps.extract-issue.outputs.branch_name }}
+               The gh CLI is available and has full permissions. This WILL work. The task is not complete without creating a PR.
             
             ### Critical Requirements:
             - You are already on branch: ${{ steps.extract-issue.outputs.branch_name }}
