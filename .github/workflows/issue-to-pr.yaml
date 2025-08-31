@@ -325,4 +325,4 @@ _🤖 PR created automatically after Claude implementation_" \
             fi
           else
             echo "✅ PR #$EXISTING_PR already exists"
-          fi# Test comment
+          fi
