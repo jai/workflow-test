@@ -150,7 +150,7 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          track_progress: true
+          # track_progress not supported for issue_comment events
           claude_args: |
             --model claude-opus-4-1-20250805
             --allowedTools "mcp__github__add_comment_to_pending_review,
