@@ -198,15 +198,13 @@ jobs:
           [[ -n "$FILE_PATH" ]] && echo "  File: $FILE_PATH:$LINE_NUMBER"
           echo "  Message preview: ${COMMENT_BODY:0:100}..."
 
-      # Craft the prompt based on comment type
-      - name: Craft prompt for Claude
-        id: craft-prompt
+      # Define standard PR review instructions
+      - name: Define review instructions
+        id: review-instructions
         if: steps.check-permissions.outputs.is_authorized == 'true'
         shell: bash
         run: |
-          set -euo pipefail
-          
-          # Standard PR review instructions as env var
+          # Standard PR review instructions - kept separate for clarity and reusability
           REVIEW_INSTRUCTIONS="Perform a comprehensive code review with the following focus areas:
 
           1. **Code Quality**
@@ -237,6 +235,27 @@ jobs:
           Use inline comments ONLY for issues that need to be fixed or changed.
           Do NOT leave inline comments for praise or positive observations.
           Post a final summary review using 'gh pr comment'"
+          
+          # Output the review instructions for use in next step
+          echo "instructions<<EOF" >> $GITHUB_OUTPUT
+          echo "$REVIEW_INSTRUCTIONS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          
+          echo "✅ Review instructions defined"
+
+      # Craft the prompt based on comment type
+      - name: Craft prompt for Claude
+        id: craft-prompt
+        if: steps.check-permissions.outputs.is_authorized == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          
+          # Get review instructions from previous step
+          REVIEW_INSTRUCTIONS=$(cat <<'REVIEW_EOF'
+          ${{ steps.review-instructions.outputs.instructions }}
+          REVIEW_EOF
+          )
           
           # Base context
           BASE_CONTEXT="REPO: ${{ github.repository }}
