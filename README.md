@@ -2,9 +2,19 @@
 
 This repository is used for testing GitHub Actions workflows.
 
+## Purpose
+
+This repository serves as a testing ground for developing and refining GitHub Actions workflows, particularly focusing on automated code review capabilities.
+
 ## Test File
 
 This is a simple file for testing pull request reviews.
+
+## Key Features
+
+- Automated PR welcome messages
+- Context-aware code review responses
+- Support for multiple interaction types
 
 ## Claude Code Review Workflow
 
