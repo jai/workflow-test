@@ -39,6 +39,32 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Extract PR number based on event type
+      - name: Extract PR number
+        id: extract-pr
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Event: ${{ github.event_name }}"
+          
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            PR_NUMBER="${{ github.event.pull_request.number }}"
+            echo "📋 PR number from pull_request event: $PR_NUMBER"
+          elif [[ "${{ github.event_name }}" == "issue_comment" ]]; then
+            # For issue_comment events on PRs, the PR number is in issue.number
+            PR_NUMBER="${{ github.event.issue.number }}"
+            echo "💬 PR number from issue_comment event: $PR_NUMBER"
+          elif [[ "${{ github.event_name }}" == "pull_request_review_comment" ]]; then
+            PR_NUMBER="${{ github.event.pull_request.number }}"
+            echo "📝 PR number from pull_request_review_comment event: $PR_NUMBER"
+          else
+            PR_NUMBER=""
+            echo "⚠️ Could not determine PR number for event: ${{ github.event_name }}"
+          fi
+          
+          echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
+          echo "✅ Using PR number: $PR_NUMBER"
+
       # Determine if track_progress is supported for this event/action combination
       - name: Check track_progress support
         id: check-track-progress
@@ -87,7 +113,7 @@ jobs:
             Read,Grep,Glob,WebFetch,WebSearch,TodoWrite"
           prompt: |
             REPO: ${{ github.repository }}
-            PR NUMBER: ${{ github.event.pull_request.number }}
+            PR NUMBER: ${{ steps.extract-pr.outputs.pr_number }}
 
             Ultrathink: Perform a comprehensive, deep-analysis code review with the following focus areas:
 
