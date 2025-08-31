@@ -182,8 +182,8 @@ jobs:
         if: steps.check-permissions.outputs.is_authorized == 'true'
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          # Use PAT if available for PR creation, fallback to GITHUB_TOKEN
-          github_token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          # Use JAI_GITHUB_PAT for PR creation (has repo scope)
+          github_token: ${{ secrets.JAI_GITHUB_PAT }}
           track_progress: ${{ steps.check-track-progress.outputs.track_progress }}
           claude_args: |
             --model claude-opus-4-1-20250805
@@ -248,8 +248,8 @@ jobs:
       - name: Ensure PR is created
         if: steps.check-permissions.outputs.is_authorized == 'true'
         env:
-          # Use PAT if available for PR creation, fallback to GITHUB_TOKEN
-          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          # Use JAI_GITHUB_PAT for PR creation (has repo scope)
+          GH_TOKEN: ${{ secrets.JAI_GITHUB_PAT }}
         run: |
           echo "🔍 Checking if PR was created..."
           sleep 10  # Give Claude time to create PR
