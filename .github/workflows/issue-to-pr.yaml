@@ -262,3 +262,67 @@ jobs:
             - The branch has already been created and checked out for you
             
             IMPORTANT: You MUST create a pull request using mcp__github__create_pr after implementing the solution.
+
+      # Post-processing: Create PR if Claude didn't
+      - name: Ensure PR is created
+        if: steps.check-permissions.outputs.is_authorized == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "🔍 Checking if PR was created..."
+          sleep 10  # Give Claude time to create PR
+          
+          # Check if PR exists for the branch
+          EXISTING_PR=$(gh pr list --head "${{ steps.extract-issue.outputs.branch_name }}" --json number --jq '.[0].number' 2>/dev/null || echo "")
+          
+          if [[ -z "$EXISTING_PR" ]]; then
+            echo "⚠️ No PR found. Creating one automatically..."
+            
+            # First, ensure any uncommitted changes are pushed
+            if [[ -n $(git status --porcelain) ]]; then
+              echo "📝 Committing uncommitted changes..."
+              git add -A
+              git commit -m "feat: implement issue #${{ steps.extract-issue.outputs.issue_number }}
+              
+              Automated implementation by Claude
+              
+              Fixes #${{ steps.extract-issue.outputs.issue_number }}"
+            fi
+            
+            # Push the branch
+            git push -u origin "${{ steps.extract-issue.outputs.branch_name }}" 2>/dev/null || echo "Branch already exists on remote"
+            
+            # Create PR
+            PR_URL=$(gh pr create \
+              --title "feat: Implement #${{ steps.extract-issue.outputs.issue_number }} - ${{ steps.extract-issue.outputs.issue_title }}" \
+              --body "Fixes #${{ steps.extract-issue.outputs.issue_number }}
+
+## Summary
+This PR implements the solution for issue #${{ steps.extract-issue.outputs.issue_number }}.
+
+## Details
+**Issue**: ${{ steps.extract-issue.outputs.issue_title }}
+**Author**: @${{ steps.extract-issue.outputs.issue_author }}
+
+## Implementation
+The changes in this PR were implemented by Claude Opus 4.1 through automated workflow.
+
+---
+_🤖 PR created automatically after Claude implementation_" \
+              --base master \
+              --head "${{ steps.extract-issue.outputs.branch_name }}" 2>/dev/null) || echo "PR may already exist"
+            
+            if [[ -n "$PR_URL" ]]; then
+              echo "✅ Created PR: $PR_URL"
+              
+              # Update issue with PR link
+              gh issue comment ${{ steps.extract-issue.outputs.issue_number }} --body "✅ **Pull Request Created**
+              
+              The implementation is complete and a pull request has been created:
+              $PR_URL
+              
+              Branch: \`${{ steps.extract-issue.outputs.branch_name }}\`"
+            fi
+          else
+            echo "✅ PR #$EXISTING_PR already exists"
+          fi
