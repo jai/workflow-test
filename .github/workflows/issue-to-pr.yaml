@@ -182,6 +182,12 @@ jobs:
           track_progress: ${{ steps.check-track-progress.outputs.track_progress }}
           claude_args: |
             --model claude-opus-4-1-20250805
+            --system-prompt "IMPORTANT: After implementing the solution, you MUST create a pull request using mcp__github__create_pr with the following parameters:
+            - title: Clear description of the feature/fix
+            - body: Must include 'Fixes #${{ steps.extract-issue.outputs.issue_number }}'
+            - base: 'master'
+            - head: '${{ steps.extract-issue.outputs.branch_name }}'
+            Remember to create the PR after committing and pushing your changes."
             --allowedTools "mcp__github__add_comment_to_pending_review,
             mcp__github__add_pull_request_review_comment,
             mcp__github__create_issue,
