@@ -59,6 +59,7 @@ jobs:
               echo "💬 PR number from issue_comment event: $PR_NUMBER"
             else
               echo "⚠️ Issue comment is not on a PR, skipping"
+              echo "::notice::Skipping: Comment is on an issue, not a pull request"
               exit 0
             fi
           elif [[ "${{ github.event_name }}" == "pull_request_review_comment" ]]; then
@@ -75,6 +76,7 @@ jobs:
       # Determine if track_progress is supported for this event/action combination
       - name: Check track_progress support
         id: check-track-progress
+        if: steps.check-permissions.outputs.is_authorized == 'true'
         shell: bash
         run: |
           set -euo pipefail
