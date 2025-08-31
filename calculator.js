@@ -29,6 +29,28 @@ class Calculator {
     clearHistory() {
         this.history = [];
     }
+
+    abs(num) {
+        // Handle edge cases for null and undefined
+        if (num === null || num === undefined) {
+            this.history.push(`abs(${num}) = 0`);
+            return 0;
+        }
+        
+        // Convert to number if it's not already
+        const value = Number(num);
+        
+        // Check if conversion resulted in NaN
+        if (isNaN(value)) {
+            this.history.push(`abs(${num}) = 0`);
+            return 0;
+        }
+        
+        // Return absolute value
+        const result = Math.abs(value);
+        this.history.push(`abs(${num}) = ${result}`);
+        return result;
+    }
 }
 
 // Example usage
