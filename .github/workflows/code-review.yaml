@@ -18,6 +18,11 @@ permissions:
 jobs:
   review:
     runs-on: ubuntu-latest
+    # Only run if this is a PR ready for review, or if comment mentions @claude
+    if: |
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude'))
     steps:
       # Check if the actor has write or admin permissions on the repository
       - name: Check actor permissions
@@ -59,6 +64,7 @@ jobs:
               echo "💬 PR number from issue_comment event: $PR_NUMBER"
             else
               echo "⚠️ Issue comment is not on a PR, skipping"
+              echo "::notice::Skipping: Comment is on an issue, not a pull request"
               exit 0
             fi
           elif [[ "${{ github.event_name }}" == "pull_request_review_comment" ]]; then
@@ -75,6 +81,7 @@ jobs:
       # Determine if track_progress is supported for this event/action combination
       - name: Check track_progress support
         id: check-track-progress
+        if: steps.check-permissions.outputs.is_authorized == 'true'
         shell: bash
         run: |
           set -euo pipefail
