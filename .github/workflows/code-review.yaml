@@ -268,7 +268,8 @@ jobs:
           # Add file/line info if it's an inline comment
           if [[ "${{ steps.extract-comment.outputs.comment_type }}" == "inline_comment" ]]; then
             BASE_CONTEXT="${BASE_CONTEXT}
-          - **File**: ${{ steps.extract-comment.outputs.file_path }}:${{ steps.extract-comment.outputs.line_number }}"
+          - **File**: ${{ steps.extract-comment.outputs.file_path }}:${{ steps.extract-comment.outputs.line_number }}
+          - **Comment ID**: ${{ steps.extract-comment.outputs.comment_id }}"
           fi
           
           # Get comment body from the extract-comment step output
@@ -288,13 +289,16 @@ jobs:
           
           The user has commented on a specific line of code in ${{ steps.extract-comment.outputs.file_path }} at line ${{ steps.extract-comment.outputs.line_number }}.
           
+          IMPORTANT: Reply to the existing comment thread with ID ${{ steps.extract-comment.outputs.comment_id }}
+          
           Analyze their comment and respond appropriately:
           - If they're asking a question about the code, answer it directly
           - If they're pointing out an issue, acknowledge and discuss it
           - If they're requesting a change, evaluate and respond
           - Focus on the specific code context they're commenting on
           - Be concise and directly relevant to their comment
-          - Use the 'mcp__github_inline_comment__create_inline_comment' tool to respond to the user"
+          - Use 'gh api' to reply to comment ID ${{ steps.extract-comment.outputs.comment_id }} in the same thread
+          - Command format: gh api -X POST /repos/${{ github.repository }}/pulls/comments/${{ steps.extract-comment.outputs.comment_id }}/replies -f body='Your response here'"
           
           elif [[ "${{ steps.extract-comment.outputs.comment_type }}" == "pr_comment" ]]; then
             FULL_PROMPT="${BASE_CONTEXT}
