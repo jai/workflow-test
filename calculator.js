@@ -12,7 +12,9 @@ class Calculator {
     }
 
     divide(a, b) {
-        // TODO: Add zero check
+        if (b === 0) {
+            return 'Error: Division by zero';
+        }
         const result = a / b;
         this.history.push(`${a} / ${b} = ${result}`);
         return result;
