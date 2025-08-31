@@ -182,12 +182,19 @@ jobs:
           track_progress: ${{ steps.check-track-progress.outputs.track_progress }}
           claude_args: |
             --model claude-opus-4-1-20250805
-            --system-prompt "IMPORTANT: After implementing the solution, you MUST create a pull request using mcp__github__create_pr with the following parameters:
-            - title: Clear description of the feature/fix
-            - body: Must include 'Fixes #${{ steps.extract-issue.outputs.issue_number }}'
-            - base: 'master'
-            - head: '${{ steps.extract-issue.outputs.branch_name }}'
-            Remember to create the PR after committing and pushing your changes."
+            --system-prompt "CRITICAL INSTRUCTIONS: You MUST follow these steps in order:
+            
+            1. First, implement the solution for issue #${{ steps.extract-issue.outputs.issue_number }}
+            2. Commit your changes using git or mcp__github_file_ops__commit_files
+            3. Push the changes to the branch '${{ steps.extract-issue.outputs.branch_name }}'
+            4. MANDATORY: Create a pull request using mcp__github__create_pr with these EXACT parameters:
+               - title: A clear description of what was implemented
+               - body: Must include the text 'Fixes #${{ steps.extract-issue.outputs.issue_number }}' plus a summary of changes
+               - base: 'master'
+               - head: '${{ steps.extract-issue.outputs.branch_name }}'
+            
+            DO NOT end your work without creating the pull request. The PR creation is a required step.
+            If mcp__github__create_pr fails, try using 'gh pr create' command as a fallback."
             --allowedTools "mcp__github__add_comment_to_pending_review,
             mcp__github__add_pull_request_review_comment,
             mcp__github__create_issue,
