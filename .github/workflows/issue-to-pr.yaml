@@ -293,22 +293,20 @@ jobs:
             git push -u origin "${{ steps.extract-issue.outputs.branch_name }}" 2>/dev/null || echo "Branch already exists on remote"
             
             # Create PR
+            PR_BODY="Fixes #${{ steps.extract-issue.outputs.issue_number }}
+            
+            Summary: This PR implements the solution for issue #${{ steps.extract-issue.outputs.issue_number }}.
+            
+            Issue: ${{ steps.extract-issue.outputs.issue_title }}
+            Author: @${{ steps.extract-issue.outputs.issue_author }}
+            
+            The changes in this PR were implemented by Claude Opus 4.1 through automated workflow.
+            
+            _🤖 PR created automatically after Claude implementation_"
+            
             PR_URL=$(gh pr create \
               --title "feat: Implement #${{ steps.extract-issue.outputs.issue_number }} - ${{ steps.extract-issue.outputs.issue_title }}" \
-              --body "Fixes #${{ steps.extract-issue.outputs.issue_number }}
-
-## Summary
-This PR implements the solution for issue #${{ steps.extract-issue.outputs.issue_number }}.
-
-## Details
-**Issue**: ${{ steps.extract-issue.outputs.issue_title }}
-**Author**: @${{ steps.extract-issue.outputs.issue_author }}
-
-## Implementation
-The changes in this PR were implemented by Claude Opus 4.1 through automated workflow.
-
----
-_🤖 PR created automatically after Claude implementation_" \
+              --body "$PR_BODY" \
               --base master \
               --head "${{ steps.extract-issue.outputs.branch_name }}" 2>/dev/null) || echo "PR may already exist"
             
