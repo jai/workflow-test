@@ -182,7 +182,8 @@ jobs:
         if: steps.check-permissions.outputs.is_authorized == 'true'
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          # Use PAT if available for PR creation, fallback to GITHUB_TOKEN
+          github_token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
           track_progress: ${{ steps.check-track-progress.outputs.track_progress }}
           claude_args: |
             --model claude-opus-4-1-20250805
@@ -196,7 +197,7 @@ jobs:
             4. CREATE THE PULL REQUEST using gh CLI (THIS IS MANDATORY):
                gh pr create --title 'feat: Description of what you implemented' --body 'Fixes #${{ steps.extract-issue.outputs.issue_number }}' --base master --head ${{ steps.extract-issue.outputs.branch_name }}
                
-               The gh CLI is available and has the necessary permissions. You MUST use it to create a PR.
+               IMPORTANT: If you get an error about GitHub Actions not being permitted to create PRs, that's OK - the workflow will handle it in post-processing.
             
             IMPORTANT: The branch '${{ steps.extract-issue.outputs.branch_name }}' already exists and you are on it. Do NOT create a new branch.
             IMPORTANT: You MUST create a PR. This is not optional. The task is not complete without a PR."
@@ -247,7 +248,8 @@ jobs:
       - name: Ensure PR is created
         if: steps.check-permissions.outputs.is_authorized == 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Use PAT if available for PR creation, fallback to GITHUB_TOKEN
+          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
         run: |
           echo "🔍 Checking if PR was created..."
           sleep 10  # Give Claude time to create PR
