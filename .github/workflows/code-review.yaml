@@ -10,7 +10,7 @@ on:
     types: [opened, reopened, ready_for_review]
 
 permissions:
-  contents: read
+  contents: read  # Note: "contents: write" would eliminate git config errors but is not needed for reviews
   issues: write
   pull-requests: write
   actions: read
@@ -95,8 +95,8 @@ jobs:
           fetch-depth: 0
 
       # Extract PR number based on event type
-      - name: Extract PR number and context
-        id: extract-context
+      - name: Extract PR number
+        id: extract-pr
         if: steps.check-permissions.outputs.is_authorized == 'true'
         shell: bash
         run: |
@@ -107,22 +107,12 @@ jobs:
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             PR_NUMBER="${{ github.event.pull_request.number }}"
             echo "📋 PR number from pull_request event: $PR_NUMBER"
-            CONTEXT_TYPE="full_review"
-            COMMENT_BODY=""
           elif [[ "${{ github.event_name }}" == "issue_comment" ]]; then
             # For issue_comment events on PRs, the PR number is in issue.number
             # Verify this is actually a PR comment, not an issue comment
             if [[ "${{ github.event.issue.pull_request }}" != "" ]]; then
               PR_NUMBER="${{ github.event.issue.number }}"
               echo "💬 PR number from issue_comment event: $PR_NUMBER"
-              COMMENT_BODY="${{ github.event.comment.body }}"
-              
-              # Determine if this is a review request or a specific question
-              if echo "$COMMENT_BODY" | grep -iE "review|check this|review this pr|full review" > /dev/null; then
-                CONTEXT_TYPE="full_review"
-              else
-                CONTEXT_TYPE="specific_question"
-              fi
             else
               echo "⚠️ Issue comment is not on a PR, skipping"
               echo "::notice::Skipping: Comment is on an issue, not a pull request"
@@ -131,8 +121,6 @@ jobs:
           elif [[ "${{ github.event_name }}" == "pull_request_review_comment" ]]; then
             PR_NUMBER="${{ github.event.pull_request.number }}"
             echo "📝 PR number from pull_request_review_comment event: $PR_NUMBER"
-            COMMENT_BODY="${{ github.event.comment.body }}"
-            CONTEXT_TYPE="inline_comment"
           else
             echo "⚠️ Could not determine PR number for event: ${{ github.event_name }}"
             echo "::error::Unsupported event type: ${{ github.event_name }}"
@@ -140,11 +128,7 @@ jobs:
           fi
           
           echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
-          echo "context_type=$CONTEXT_TYPE" >> $GITHUB_OUTPUT
-          echo "comment_body<<EOF" >> $GITHUB_OUTPUT
-          echo "$COMMENT_BODY" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-          echo "✅ Using PR number: $PR_NUMBER, Context: $CONTEXT_TYPE"
+          echo "✅ Using PR number: $PR_NUMBER"
 
       # Determine if track_progress is supported for this event/action combination
       - name: Check track_progress support
@@ -193,66 +177,37 @@ jobs:
             Bash,Read,Grep,Glob,WebFetch,WebSearch,TodoWrite"
           prompt: |
             REPO: ${{ github.repository }}
-            PR NUMBER: ${{ steps.extract-context.outputs.pr_number }}
-            CONTEXT TYPE: ${{ steps.extract-context.outputs.context_type }}
-            
-            # IMPORTANT: Read this context first
-            
-            You are Claude Opus 4.1, an AI code review assistant. Your response should be based on the context type:
-            
-            ## Context: ${{ steps.extract-context.outputs.context_type }}
-            
-            ${{ steps.extract-context.outputs.context_type == 'full_review' && 
-            'This is a FULL REVIEW request. Perform a comprehensive code review.' || 
-            steps.extract-context.outputs.context_type == 'inline_comment' && 
-            'This is an INLINE COMMENT. Someone is asking about specific code. Answer their question directly.' ||
-            'This is a SPECIFIC QUESTION. Answer only what was asked, do not perform a full review.' }}
-            
-            ## User's Message/Comment:
-            ${{ steps.extract-context.outputs.comment_body }}
-            
-            ---
-            
-            # Instructions based on context:
-            
-            ${{ steps.extract-context.outputs.context_type == 'full_review' && 
-            '## Perform a COMPREHENSIVE CODE REVIEW
-            
-            Focus on these areas:
-            
+            PR NUMBER: ${{ steps.extract-pr.outputs.pr_number }}
+
+            Ultrathink: Perform a comprehensive, deep-analysis code review with the following focus areas:
+
             1. **Code Quality**
                - Clean code principles and best practices
                - Proper error handling and edge cases
                - Code readability and maintainability
-            
+
             2. **Security**
                - Check for potential security vulnerabilities
                - Validate input sanitization
                - Review authentication/authorization logic
-            
+
             3. **Performance**
                - Identify potential performance bottlenecks
                - Review database queries for efficiency
                - Check for memory leaks or resource issues
-            
+
             4. **Testing**
                - Verify adequate test coverage
                - Review test quality and edge cases
                - Check for missing test scenarios
-            
+
             5. **Documentation**
                - Ensure code is properly documented
                - Verify README updates for new features
                - Check API documentation accuracy
-            
+
             Use inline comments ONLY for issues that need to be fixed or changed.
             Do NOT leave inline comments for praise or positive observations.
-            Post a final summary review using gh pr comment.' ||
-            '## Answer the specific question or comment
-            
-            1. Focus ONLY on what was asked
-            2. Be direct and concise
-            3. Do NOT perform a full code review unless explicitly requested
-            4. If the comment contains a question, answer it directly
-            5. If asking about specific code, provide focused feedback on just that code
-            6. Use gh pr comment or reply to the thread as appropriate' }}
+            Avoid general observations, praise, or summary. If necessary, add them into the main code review and not in code review/inline comments.
+
+            Don't forget to post the final review using 'gh pr comment'
