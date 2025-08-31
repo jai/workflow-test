@@ -217,35 +217,38 @@ jobs:
             
             ### Instructions:
             
-            1. **Read the issue**: Use mcp__github_issues__get_issue to understand the requirements
-            2. **Review comments**: Use mcp__github_issues__list_issue_comments if there are clarifications
-            3. **Plan the implementation**: Break down the task into steps
-            4. **Implement the solution**: Write the necessary code changes
-            5. **Test your changes**: Run existing tests and add new ones if needed
-            6. **Commit your changes**: 
+            1. **Understand the requirements**: 
+               - Get the issue details using mcp__github__get_issue
+               - Review any comments with mcp__github__get_issue_comments
+            
+            2. **Implement the solution**:
+               - Read existing files using mcp__github__get_file_contents or Read tool
+               - Create or update files using mcp__github__create_or_update_file or Write/Edit tools
+               - Follow existing code patterns and conventions
+               - Add appropriate error handling
+               - Include tests where applicable
+            
+            3. **Save your work**:
+               - Use mcp__github_file_ops__commit_files to commit changes OR use Bash with git commands
                - Create atomic, well-described commits
                - Use conventional commit format (feat:, fix:, docs:, etc.)
-               - Reference the issue number in commit messages
-            7. **Push the branch**: Push your implementation branch using git push
-            8. **Create a PR**: 
-               - Use the mcp__github__create_pr tool to create the pull request
-               - Set the title to describe the feature/fix
-               - In the body, reference "Fixes #${{ steps.extract-issue.outputs.issue_number }}"
-               - List the changes made
-               - Include test instructions
-               - Set base branch to "master" or "main"
-               - Set head branch to your implementation branch
+               - Reference issue #${{ steps.extract-issue.outputs.issue_number }} in commit messages
+               - The branch "${{ steps.extract-issue.outputs.branch_name }}" has already been created for you
+            
+            4. **Create the Pull Request**:
+               - Use mcp__github__create_pr to create the pull request
+               - Title: Clear description of the feature/fix
+               - Body: Must include "Fixes #${{ steps.extract-issue.outputs.issue_number }}"
+               - Base branch: "master"
+               - Head branch: "${{ steps.extract-issue.outputs.branch_name }}"
             
             ### Important Notes:
+            - You have access to both MCP tools and Bash/Git commands
+            - Choose the appropriate tool for each task
             - Focus on clean, maintainable code
-            - Follow existing code patterns and conventions
-            - Add appropriate error handling
-            - Update documentation if needed
+            - The branch has already been created and checked out for you
             
-            IMPORTANT: After implementing, you MUST:
-            1. Commit all changes using git commit
-            2. Push the branch using git push
-            3. Create a PR using mcp__github__create_pr tool (NOT gh pr create - that won't work with GitHub Actions token)
+            IMPORTANT: You MUST create a pull request using mcp__github__create_pr after implementing the solution.
 
       # Fallback: Push branch if Claude didn't
       - name: Ensure branch is pushed
@@ -256,7 +259,6 @@ jobs:
           if [[ -n $(git status --porcelain) ]]; then
             echo "⚠️ Found uncommitted changes, committing them"
             git add -A
-            echo "${{ secrets.GPG_PASSPHRASE }}" | gpg --batch --yes --passphrase-fd 0 --pinentry-mode loopback -u ${{ secrets.GPG_KEY_ID }} --sign --detach-sign <(echo "test")
             git commit -m "feat: implement issue #${{ steps.extract-issue.outputs.issue_number }}
 
             Automated implementation by Claude
