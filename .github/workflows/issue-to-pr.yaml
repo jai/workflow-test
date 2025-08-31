@@ -144,13 +144,42 @@ jobs:
           
           _This is an automated implementation by Claude Opus 4.1_"
 
+      # Determine if track_progress is supported for this event
+      - name: Check track_progress support
+        id: check-track-progress
+        if: steps.check-permissions.outputs.is_authorized == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Event: ${{ github.event_name }}, Action: ${{ github.event.action }}"
+
+          # Check if this event/action combination supports track_progress
+          case "${{ github.event_name }}" in
+            issues)
+              case "${{ github.event.action }}" in
+                opened)
+                  echo "track_progress=true" >> $GITHUB_OUTPUT
+                  echo "✅ track_progress supported for issues/${{ github.event.action }}"
+                  ;;
+                *)
+                  echo "track_progress=false" >> $GITHUB_OUTPUT
+                  echo "⚠️ track_progress not supported for issues/${{ github.event.action }}"
+                  ;;
+              esac
+              ;;
+            *)
+              echo "track_progress=false" >> $GITHUB_OUTPUT
+              echo "⚠️ track_progress not supported for ${{ github.event_name }}/${{ github.event.action }}"
+              ;;
+          esac
+
       # Run Claude to implement the issue
       - uses: anthropics/claude-code-action@v1
         if: steps.check-permissions.outputs.is_authorized == 'true'
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          # track_progress not supported for issue_comment events
+          track_progress: ${{ steps.check-track-progress.outputs.track_progress }}
           claude_args: |
             --model claude-opus-4-1-20250805
             --allowedTools "mcp__github__add_comment_to_pending_review,
