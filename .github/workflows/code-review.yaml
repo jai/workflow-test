@@ -135,31 +135,46 @@ jobs:
         id: extract-comment
         if: steps.check-permissions.outputs.is_authorized == 'true'
         shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          COMMENT_BODY_ISSUE: ${{ github.event_name == 'issue_comment' && github.event.comment.body || '' }}
+          COMMENT_BODY_REVIEW: ${{ github.event_name == 'pull_request_review_comment' && github.event.comment.body || '' }}
+          COMMENT_ID_ISSUE: ${{ github.event_name == 'issue_comment' && github.event.comment.id || '' }}
+          COMMENT_ID_REVIEW: ${{ github.event_name == 'pull_request_review_comment' && github.event.comment.id || '' }}
+          COMMENT_URL_ISSUE: ${{ github.event_name == 'issue_comment' && github.event.comment.html_url || '' }}
+          COMMENT_URL_REVIEW: ${{ github.event_name == 'pull_request_review_comment' && github.event.comment.html_url || '' }}
+          COMMENT_AUTHOR_ISSUE: ${{ github.event_name == 'issue_comment' && github.event.comment.user.login || '' }}
+          COMMENT_AUTHOR_REVIEW: ${{ github.event_name == 'pull_request_review_comment' && github.event.comment.user.login || '' }}
+          PR_URL: ${{ github.event.pull_request.html_url || '' }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login || '' }}
+          REVIEW_FILE_PATH: ${{ github.event_name == 'pull_request_review_comment' && github.event.comment.path || '' }}
+          REVIEW_LINE: ${{ github.event_name == 'pull_request_review_comment' && github.event.comment.line || '' }}
+          REVIEW_ORIG_LINE: ${{ github.event_name == 'pull_request_review_comment' && github.event.comment.original_line || '' }}
         run: |
           set -euo pipefail
           
-          if [[ "${{ github.event_name }}" == "issue_comment" ]]; then
+          if [[ "$EVENT_NAME" == "issue_comment" ]]; then
             # PR comment (not inline)
             COMMENT_TYPE="pr_comment"
-            COMMENT_BODY="${{ github.event.comment.body }}"
-            COMMENT_ID="${{ github.event.comment.id }}"
-            COMMENT_URL="${{ github.event.comment.html_url }}"
-            COMMENT_AUTHOR="${{ github.event.comment.user.login }}"
+            COMMENT_BODY="$COMMENT_BODY_ISSUE"
+            COMMENT_ID="$COMMENT_ID_ISSUE"
+            COMMENT_URL="$COMMENT_URL_ISSUE"
+            COMMENT_AUTHOR="$COMMENT_AUTHOR_ISSUE"
             FILE_PATH=""
             LINE_NUMBER=""
             
             echo "💬 PR Comment from @${COMMENT_AUTHOR}"
             echo "Comment ID: ${COMMENT_ID}"
             
-          elif [[ "${{ github.event_name }}" == "pull_request_review_comment" ]]; then
+          elif [[ "$EVENT_NAME" == "pull_request_review_comment" ]]; then
             # Inline code review comment
             COMMENT_TYPE="inline_comment"
-            COMMENT_BODY="${{ github.event.comment.body }}"
-            COMMENT_ID="${{ github.event.comment.id }}"
-            COMMENT_URL="${{ github.event.comment.html_url }}"
-            COMMENT_AUTHOR="${{ github.event.comment.user.login }}"
-            FILE_PATH="${{ github.event.comment.path }}"
-            LINE_NUMBER="${{ github.event.comment.line || github.event.comment.original_line }}"
+            COMMENT_BODY="$COMMENT_BODY_REVIEW"
+            COMMENT_ID="$COMMENT_ID_REVIEW"
+            COMMENT_URL="$COMMENT_URL_REVIEW"
+            COMMENT_AUTHOR="$COMMENT_AUTHOR_REVIEW"
+            FILE_PATH="$REVIEW_FILE_PATH"
+            LINE_NUMBER="${REVIEW_LINE:-$REVIEW_ORIG_LINE}"
             
             echo "📝 Inline Comment from @${COMMENT_AUTHOR}"
             echo "File: ${FILE_PATH}:${LINE_NUMBER}"
@@ -170,8 +185,8 @@ jobs:
             COMMENT_TYPE="pr_event"
             COMMENT_BODY="PR marked as ready for review"
             COMMENT_ID=""
-            COMMENT_URL="${{ github.event.pull_request.html_url }}"
-            COMMENT_AUTHOR="${{ github.event.pull_request.user.login }}"
+            COMMENT_URL="$PR_URL"
+            COMMENT_AUTHOR="$PR_AUTHOR"
             FILE_PATH=""
             LINE_NUMBER=""
             
