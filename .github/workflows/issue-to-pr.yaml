@@ -15,10 +15,11 @@ permissions:
 jobs:
   implement-issue:
     runs-on: ubuntu-latest
-    # Only run if comment contains @claude-implement or issue is opened with implement label
+    # Only run if comment contains @claude-implement (on issues, not PRs)
     if: |
-      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude-implement')) ||
-      (github.event_name == 'issues' && github.event.action == 'opened' && contains(github.event.issue.labels.*.name, 'claude-implement'))
+      github.event_name == 'issue_comment' && 
+      contains(github.event.comment.body, '@claude-implement') &&
+      github.event.issue.pull_request == null
     
     steps:
       # Check permissions
@@ -124,7 +125,10 @@ jobs:
           # Create and checkout new branch
           git checkout -b "$BRANCH_NAME"
           
-          echo "✅ Created branch: $BRANCH_NAME"
+          # Push the branch immediately so it exists on remote
+          git push -u origin "$BRANCH_NAME"
+          
+          echo "✅ Created and pushed branch: $BRANCH_NAME"
 
       # Post initial comment
       - name: Post starting comment
@@ -182,19 +186,26 @@ jobs:
           track_progress: ${{ steps.check-track-progress.outputs.track_progress }}
           claude_args: |
             --model claude-opus-4-1-20250805
-            --system-prompt "CRITICAL INSTRUCTIONS: You MUST follow these steps in order:
+            --system-prompt "YOU ARE ON BRANCH: ${{ steps.extract-issue.outputs.branch_name }}
             
-            1. First, implement the solution for issue #${{ steps.extract-issue.outputs.issue_number }}
-            2. Commit your changes using git or mcp__github_file_ops__commit_files
-            3. Push the changes to the branch '${{ steps.extract-issue.outputs.branch_name }}'
-            4. MANDATORY: Create a pull request using mcp__github__create_pr with these EXACT parameters:
-               - title: A clear description of what was implemented
-               - body: Must include the text 'Fixes #${{ steps.extract-issue.outputs.issue_number }}' plus a summary of changes
+            CRITICAL: You MUST create a pull request at the end. Follow these EXACT steps:
+            
+            1. Implement the solution for issue #${{ steps.extract-issue.outputs.issue_number }}
+            2. Commit your changes (git add -A && git commit -m 'your message')
+            3. Push changes (git push)
+            4. CREATE THE PULL REQUEST using one of these methods:
+               
+               Method A (preferred): Use mcp__github__create_pr tool:
+               - title: 'feat: Description of what you implemented'
+               - body: 'Fixes #${{ steps.extract-issue.outputs.issue_number }}\n\nSummary of changes...'
                - base: 'master'
                - head: '${{ steps.extract-issue.outputs.branch_name }}'
+               
+               Method B (if Method A fails): Use gh CLI:
+               gh pr create --title 'feat: Description' --body 'Fixes #${{ steps.extract-issue.outputs.issue_number }}' --base master --head ${{ steps.extract-issue.outputs.branch_name }}
             
-            DO NOT end your work without creating the pull request. The PR creation is a required step.
-            If mcp__github__create_pr fails, try using 'gh pr create' command as a fallback."
+            IMPORTANT: The branch '${{ steps.extract-issue.outputs.branch_name }}' already exists and you are on it. Do NOT create a new branch.
+            IMPORTANT: You MUST create a PR. This is not optional. The task is not complete without a PR."
             --allowedTools "mcp__github__add_comment_to_pending_review,
             mcp__github__add_pull_request_review_comment,
             mcp__github__create_issue,
@@ -248,20 +259,24 @@ jobs:
                - Reference issue #${{ steps.extract-issue.outputs.issue_number }} in commit messages
                - The branch "${{ steps.extract-issue.outputs.branch_name }}" has already been created for you
             
-            4. **Create the Pull Request**:
-               - Use mcp__github__create_pr to create the pull request
-               - Title: Clear description of the feature/fix
-               - Body: Must include "Fixes #${{ steps.extract-issue.outputs.issue_number }}"
-               - Base branch: "master"
-               - Head branch: "${{ steps.extract-issue.outputs.branch_name }}"
+            4. **Create the Pull Request** (MANDATORY):
+               YOU MUST create a pull request. Try these methods in order:
+               
+               a) First try: mcp__github__create_pr tool with:
+                  - title: "feat: Clear description of what you implemented"
+                  - body: "Fixes #${{ steps.extract-issue.outputs.issue_number }}\n\n## Summary\n[Your summary here]"
+                  - base: "master"
+                  - head: "${{ steps.extract-issue.outputs.branch_name }}"
+               
+               b) If that fails, use: gh pr create --title "feat: [description]" --body "Fixes #${{ steps.extract-issue.outputs.issue_number }}" --base master --head ${{ steps.extract-issue.outputs.branch_name }}
             
-            ### Important Notes:
-            - You have access to both MCP tools and Bash/Git commands
-            - Choose the appropriate tool for each task
-            - Focus on clean, maintainable code
-            - The branch has already been created and checked out for you
+            ### Critical Requirements:
+            - You are already on branch: ${{ steps.extract-issue.outputs.branch_name }}
+            - Do NOT create a new branch
+            - You MUST create a PR - the task is incomplete without it
+            - If one PR method fails, try the other
             
-            IMPORTANT: You MUST create a pull request using mcp__github__create_pr after implementing the solution.
+            FAILURE TO CREATE A PR MEANS THE TASK IS INCOMPLETE.
 
       # Post-processing: Create PR if Claude didn't
       - name: Ensure PR is created
