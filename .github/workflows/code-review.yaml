@@ -395,5 +395,6 @@ jobs:
             mcp__github_pulls__list_pull_request_files,
             mcp__github_pulls__get_pull_request_diff,
             mcp__github_ci__get_ci_status,
+            mcp__github_comment__update_claude_comment,
             Bash,Read,Grep,Glob,WebFetch,WebSearch,TodoWrite"
           prompt: ${{ steps.craft-prompt.outputs.prompt }}
