@@ -252,12 +252,18 @@ jobs:
           - **File**: ${{ steps.extract-comment.outputs.file_path }}:${{ steps.extract-comment.outputs.line_number }}"
           fi
           
+          # Get comment body from the extract-comment step output
+          COMMENT_BODY=$(cat <<'COMMENT_EOF'
+          ${{ steps.extract-comment.outputs.comment_body }}
+          COMMENT_EOF
+          )
+          
           # Craft prompt based on comment type
           if [[ "${{ steps.extract-comment.outputs.comment_type }}" == "inline_comment" ]]; then
             FULL_PROMPT="${BASE_CONTEXT}
           
           ## User's Inline Comment:
-          ${{ steps.extract-comment.outputs.comment_body }}
+          ${COMMENT_BODY}
           
           ---
           
@@ -274,7 +280,7 @@ jobs:
             FULL_PROMPT="${BASE_CONTEXT}
           
           ## User's Comment:
-          ${{ steps.extract-comment.outputs.comment_body }}
+          ${COMMENT_BODY}
           
           ---
           
