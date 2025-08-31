@@ -130,6 +130,178 @@ jobs:
           echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
           echo "✅ Using PR number: $PR_NUMBER"
 
+      # Extract comment details based on event type
+      - name: Extract comment details
+        id: extract-comment
+        if: steps.check-permissions.outputs.is_authorized == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          
+          if [[ "${{ github.event_name }}" == "issue_comment" ]]; then
+            # PR comment (not inline)
+            COMMENT_TYPE="pr_comment"
+            COMMENT_BODY="${{ github.event.comment.body }}"
+            COMMENT_ID="${{ github.event.comment.id }}"
+            COMMENT_URL="${{ github.event.comment.html_url }}"
+            COMMENT_AUTHOR="${{ github.event.comment.user.login }}"
+            FILE_PATH=""
+            LINE_NUMBER=""
+            
+            echo "💬 PR Comment from @${COMMENT_AUTHOR}"
+            echo "Comment ID: ${COMMENT_ID}"
+            
+          elif [[ "${{ github.event_name }}" == "pull_request_review_comment" ]]; then
+            # Inline code review comment
+            COMMENT_TYPE="inline_comment"
+            COMMENT_BODY="${{ github.event.comment.body }}"
+            COMMENT_ID="${{ github.event.comment.id }}"
+            COMMENT_URL="${{ github.event.comment.html_url }}"
+            COMMENT_AUTHOR="${{ github.event.comment.user.login }}"
+            FILE_PATH="${{ github.event.comment.path }}"
+            LINE_NUMBER="${{ github.event.comment.line || github.event.comment.original_line }}"
+            
+            echo "📝 Inline Comment from @${COMMENT_AUTHOR}"
+            echo "File: ${FILE_PATH}:${LINE_NUMBER}"
+            echo "Comment ID: ${COMMENT_ID}"
+            
+          else
+            # Pull request event (ready_for_review)
+            COMMENT_TYPE="pr_event"
+            COMMENT_BODY="PR marked as ready for review"
+            COMMENT_ID=""
+            COMMENT_URL="${{ github.event.pull_request.html_url }}"
+            COMMENT_AUTHOR="${{ github.event.pull_request.user.login }}"
+            FILE_PATH=""
+            LINE_NUMBER=""
+            
+            echo "🚀 PR ready for review by @${COMMENT_AUTHOR}"
+          fi
+          
+          # Output all the extracted information
+          echo "comment_type=$COMMENT_TYPE" >> $GITHUB_OUTPUT
+          echo "comment_id=$COMMENT_ID" >> $GITHUB_OUTPUT
+          echo "comment_url=$COMMENT_URL" >> $GITHUB_OUTPUT
+          echo "comment_author=$COMMENT_AUTHOR" >> $GITHUB_OUTPUT
+          echo "file_path=$FILE_PATH" >> $GITHUB_OUTPUT
+          echo "line_number=$LINE_NUMBER" >> $GITHUB_OUTPUT
+          
+          # Multi-line comment body
+          echo "comment_body<<EOF" >> $GITHUB_OUTPUT
+          echo "$COMMENT_BODY" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          
+          # Summary
+          echo "✅ Extracted comment details:"
+          echo "  Type: $COMMENT_TYPE"
+          echo "  Author: @$COMMENT_AUTHOR"
+          [[ -n "$FILE_PATH" ]] && echo "  File: $FILE_PATH:$LINE_NUMBER"
+          echo "  Message preview: ${COMMENT_BODY:0:100}..."
+
+      # Craft the prompt based on comment type
+      - name: Craft prompt for Claude
+        id: craft-prompt
+        if: steps.check-permissions.outputs.is_authorized == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          
+          # Standard PR review instructions as env var
+          REVIEW_INSTRUCTIONS="Perform a comprehensive code review with the following focus areas:
+
+          1. **Code Quality**
+             - Clean code principles and best practices
+             - Proper error handling and edge cases
+             - Code readability and maintainability
+
+          2. **Security**
+             - Check for potential security vulnerabilities
+             - Validate input sanitization
+             - Review authentication/authorization logic
+
+          3. **Performance**
+             - Identify potential performance bottlenecks
+             - Review database queries for efficiency
+             - Check for memory leaks or resource issues
+
+          4. **Testing**
+             - Verify adequate test coverage
+             - Review test quality and edge cases
+             - Check for missing test scenarios
+
+          5. **Documentation**
+             - Ensure code is properly documented
+             - Verify README updates for new features
+             - Check API documentation accuracy
+
+          Use inline comments ONLY for issues that need to be fixed or changed.
+          Do NOT leave inline comments for praise or positive observations.
+          Post a final summary review using 'gh pr comment'"
+          
+          # Base context
+          BASE_CONTEXT="REPO: ${{ github.repository }}
+          PR NUMBER: ${{ steps.extract-pr.outputs.pr_number }}
+          
+          ## User Comment Details
+          - **Type**: ${{ steps.extract-comment.outputs.comment_type }}
+          - **Author**: @${{ steps.extract-comment.outputs.comment_author }}"
+          
+          # Add file/line info if it's an inline comment
+          if [[ "${{ steps.extract-comment.outputs.comment_type }}" == "inline_comment" ]]; then
+            BASE_CONTEXT="${BASE_CONTEXT}
+          - **File**: ${{ steps.extract-comment.outputs.file_path }}:${{ steps.extract-comment.outputs.line_number }}"
+          fi
+          
+          # Craft prompt based on comment type
+          if [[ "${{ steps.extract-comment.outputs.comment_type }}" == "inline_comment" ]]; then
+            FULL_PROMPT="${BASE_CONTEXT}
+          
+          ## User's Inline Comment:
+          ${{ steps.extract-comment.outputs.comment_body }}
+          
+          ---
+          
+          The user has commented on a specific line of code in ${{ steps.extract-comment.outputs.file_path }} at line ${{ steps.extract-comment.outputs.line_number }}.
+          
+          Analyze their comment and respond appropriately:
+          - If they're asking a question about the code, answer it directly
+          - If they're pointing out an issue, acknowledge and discuss it
+          - If they're requesting a change, evaluate and respond
+          - Focus on the specific code context they're commenting on
+          - Be concise and directly relevant to their comment"
+          
+          elif [[ "${{ steps.extract-comment.outputs.comment_type }}" == "pr_comment" ]]; then
+            FULL_PROMPT="${BASE_CONTEXT}
+          
+          ## User's Comment:
+          ${{ steps.extract-comment.outputs.comment_body }}
+          
+          ---
+          
+          The user has posted a comment on this PR. Analyze what they're asking for:
+          
+          - If they're asking a specific question, answer it directly and concisely
+          - If they're requesting a specific action, perform it
+          - Use your judgment to determine their intent from the comment
+          - If they're asking for a code review or to check the PR, then:
+            ${REVIEW_INSTRUCTIONS}"
+          
+          else
+            # PR marked ready for review - always do full review
+            FULL_PROMPT="${BASE_CONTEXT}
+          
+          This PR has been marked as ready for review.
+          
+          ${REVIEW_INSTRUCTIONS}"
+          fi
+          
+          # Output the complete prompt
+          echo "prompt<<EOF" >> $GITHUB_OUTPUT
+          echo "$FULL_PROMPT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          
+          echo "✅ Crafted prompt for comment type: ${{ steps.extract-comment.outputs.comment_type }}"
+
       # Determine if track_progress is supported for this event/action combination
       - name: Check track_progress support
         id: check-track-progress
@@ -175,39 +347,4 @@ jobs:
             mcp__github_pulls__get_pull_request_diff,
             mcp__github_ci__get_ci_status,
             Bash,Read,Grep,Glob,WebFetch,WebSearch,TodoWrite"
-          prompt: |
-            REPO: ${{ github.repository }}
-            PR NUMBER: ${{ steps.extract-pr.outputs.pr_number }}
-
-            Ultrathink: Perform a comprehensive, deep-analysis code review with the following focus areas:
-
-            1. **Code Quality**
-               - Clean code principles and best practices
-               - Proper error handling and edge cases
-               - Code readability and maintainability
-
-            2. **Security**
-               - Check for potential security vulnerabilities
-               - Validate input sanitization
-               - Review authentication/authorization logic
-
-            3. **Performance**
-               - Identify potential performance bottlenecks
-               - Review database queries for efficiency
-               - Check for memory leaks or resource issues
-
-            4. **Testing**
-               - Verify adequate test coverage
-               - Review test quality and edge cases
-               - Check for missing test scenarios
-
-            5. **Documentation**
-               - Ensure code is properly documented
-               - Verify README updates for new features
-               - Check API documentation accuracy
-
-            Use inline comments ONLY for issues that need to be fixed or changed.
-            Do NOT leave inline comments for praise or positive observations.
-            Avoid general observations, praise, or summary. If necessary, add them into the main code review and not in code review/inline comments.
-
-            Don't forget to post the final review using 'gh pr comment'
+          prompt: ${{ steps.craft-prompt.outputs.prompt }}
