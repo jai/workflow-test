@@ -53,7 +53,8 @@ jobs:
           elif [[ "${{ github.event_name }}" == "issue_comment" ]]; then
             # For issue_comment events on PRs, the PR number is in issue.number
             # Verify this is actually a PR comment, not an issue comment
-            if [[ -n "${{ github.event.issue.pull_request.url }}" ]]; then
+            # GitHub provides pull_request object only for PR comments
+            if [[ "${{ github.event.issue.pull_request }}" != "" ]]; then
               PR_NUMBER="${{ github.event.issue.number }}"
               echo "💬 PR number from issue_comment event: $PR_NUMBER"
             else
