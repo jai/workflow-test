@@ -36,3 +36,7 @@ When you open a new PR, you should see:
 - [ ] "@claude review" - triggers full review
 - [ ] "@claude question?" - answers only the question
 - [ ] Inline comment with @claude - focused response
+
+## Validation Status
+
+Testing the welcome message functionality with this PR.
