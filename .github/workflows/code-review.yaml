@@ -59,10 +59,11 @@ jobs:
 
           Welcome! This PR has access to AI-powered code reviews using **Claude Opus 4.1** - Anthropic's most powerful coding model.
 
-          **How to trigger a review:**
-          - 🚀 Mark your PR as "Ready for review" from draft status
+          **How to use Claude:**
+          - 🚀 Mark your PR as "Ready for review" from draft status for automatic review
           - 💬 Tag `@claude` in any comment to ask questions or request a review
           - 📝 Reply to inline code comments with `@claude` for specific feedback
+          - 🔧 Use `@claude-implement` to request code changes or fixes
 
           **What I can help with:**
           - Comprehensive code reviews (security, performance, best practices)
@@ -338,9 +339,14 @@ jobs:
 
           The user has posted a comment on this PR. Analyze what they're asking for:
 
+          IMPORTANT: This workflow is for CODE REVIEW ONLY. 
+          - If the user is asking for code changes, fixes, or implementations, respond with:
+            "To make code changes, please use @claude-implement in your comment instead."
+          - DO NOT attempt to make any code changes or commits
+          - Only provide reviews, answer questions, and give feedback
+          
+          For valid review requests:
           - If they're asking a specific question, answer it directly and concisely
-          - If they're requesting a specific action, perform it
-          - Use your judgment to determine their intent from the comment
           - If they're asking for a code review or to check the PR, then:
             ${REVIEW_INSTRUCTIONS}
 

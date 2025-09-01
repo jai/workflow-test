@@ -17,12 +17,9 @@ jobs:
     runs-on: ubuntu-latest
     # Run if:
     # 1. Issue comment with @claude-implement (not on PRs)
-    # 2. PR comment with @claude (for making changes to existing PRs)
+    # 2. PR comment with @claude-implement (for making changes to existing PRs)
     if: |
-      github.event_name == 'issue_comment' && (
-        (contains(github.event.comment.body, '@claude-implement') && github.event.issue.pull_request == null) ||
-        (contains(github.event.comment.body, '@claude') && github.event.issue.pull_request != null)
-      )
+      github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude-implement')
     
     steps:
       # Check permissions
