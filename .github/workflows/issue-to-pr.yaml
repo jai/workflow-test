@@ -47,16 +47,20 @@ jobs:
         if: steps.check-permissions.outputs.is_authorized == 'true'
         run: |
           # Configure basic Git user
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
+          git config --global user.name "Jai Govindani (via GitHub Actions)"
+          git config --global user.email "jai@govindani.com"
           
           # Check if GPG secrets are available for commit signing
-          if [[ -n "${{ secrets.GPG_SIGNING_KEY }}" ]] && [[ -n "${{ secrets.GPG_PASSPHRASE }}" ]] && [[ -n "${{ vars.GPG_KEY_ID }}" ]]; then
+          if [[ -n "${{ secrets.GPG_SIGNING_KEY }}" ]] && [[ -n "${{ vars.GPG_KEY_ID }}" ]]; then
             echo "🔐 GPG secrets found, configuring signed commits"
             
-            # Import GPG key
+            # Import GPG key (handling both with and without passphrase)
             echo -n "${{ secrets.GPG_SIGNING_KEY }}" | base64 --decode > gpg.key
-            gpg --batch --yes --passphrase "${{ secrets.GPG_PASSPHRASE }}" --pinentry-mode loopback --import gpg.key
+            if [[ -n "${{ secrets.GPG_PASSPHRASE }}" ]]; then
+              gpg --batch --yes --passphrase "${{ secrets.GPG_PASSPHRASE }}" --pinentry-mode loopback --import gpg.key
+            else
+              gpg --batch --yes --import gpg.key
+            fi
             rm gpg.key
           
             # Configure GPG
@@ -77,7 +81,11 @@ jobs:
             git config --global gpg.program gpg
             
             # Test GPG signing
-            echo "${{ secrets.GPG_PASSPHRASE }}" | gpg --batch --yes --passphrase-fd 0 --pinentry-mode loopback --sign -u ${{ vars.GPG_KEY_ID }} -o /dev/null
+            if [[ -n "${{ secrets.GPG_PASSPHRASE }}" ]]; then
+              echo "${{ secrets.GPG_PASSPHRASE }}" | gpg --batch --yes --passphrase-fd 0 --pinentry-mode loopback --sign -u ${{ vars.GPG_KEY_ID }} -o /dev/null
+            else
+              echo "test" | gpg --batch --yes --sign -u ${{ vars.GPG_KEY_ID }} -o /dev/null
+            fi
           else
             echo "⚠️ GPG secrets not configured, commits will not be signed"
             echo "To enable commit signing, add these secrets to your repository:"
