@@ -196,9 +196,9 @@ jobs:
             CRITICAL: You MUST create a pull request at the end. Follow these EXACT steps:
             
             1. Implement the solution for issue #${{ steps.extract-issue.outputs.issue_number }}
-            2. Commit your changes using mcp__github_file_ops__commit_files tool:
-               - message: 'feat: Description of your changes'
-               - files: (the files you've modified)
+            2. Commit your changes using git commands (for GPG signing):
+               - Use: git add -A && git commit -m 'feat: Description of your changes'
+               - This ensures commits are GPG signed
             3. CREATE THE PULL REQUEST using mcp__github__create_pull_request tool:
                - title: 'feat: Description of what you implemented'
                - body: 'Fixes #${{ steps.extract-issue.outputs.issue_number }}\n\nSummary of changes...'
@@ -232,7 +232,6 @@ jobs:
             mcp__github_ci__get_workflow_run_details,
             mcp__github_comment__update,
             mcp__github_comment__update_claude_comment,
-            mcp__github_file_ops__commit_files,
             mcp__github_file_ops__delete_files,
             mcp__github_inline_comment__create_inline_comment,
             Bash,Read,Write,Edit,MultiEdit,Grep,Glob,WebFetch,WebSearch,TodoWrite"
@@ -258,11 +257,12 @@ jobs:
                - Include tests where applicable
             
             3. **Save your work**:
-               - PREFERRED: Use mcp__github_file_ops__commit_files to commit changes
+               - Use git commands to commit changes (for GPG signing): git add -A && git commit -m 'feat: your message'
                - Create atomic, well-described commits
                - Use conventional commit format (feat:, fix:, docs:, etc.)
                - Reference issue #${{ steps.extract-issue.outputs.issue_number }} in commit messages
                - The branch "${{ steps.extract-issue.outputs.branch_name }}" has already been created for you
+               - Push your changes: git push
             
             4. **Create the Pull Request** (MANDATORY):
                YOU MUST create a pull request using mcp__github__create_pull_request tool:
