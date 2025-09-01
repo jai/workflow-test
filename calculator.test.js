@@ -188,6 +188,56 @@ describe('Calculator', () => {
         });
     });
 
+    describe('square', () => {
+        test('should calculate square of positive number', () => {
+            expect(calc.square(5)).toBe(25);
+        });
+
+        test('should calculate square of zero', () => {
+            expect(calc.square(0)).toBe(0);
+        });
+
+        test('should calculate square of negative number', () => {
+            expect(calc.square(-3)).toBe(9);
+        });
+
+        test('should handle decimal numbers', () => {
+            expect(calc.square(2.5)).toBe(6.25);
+        });
+
+        test('should handle very small numbers', () => {
+            expect(calc.square(0.1)).toBeCloseTo(0.01);
+        });
+
+        test('should handle large numbers', () => {
+            expect(calc.square(100)).toBe(10000);
+        });
+
+        test('should throw TypeError for non-number arguments', () => {
+            expect(() => calc.square('5')).toThrow(TypeError);
+            expect(() => calc.square(null)).toThrow(TypeError);
+            expect(() => calc.square(undefined)).toThrow(TypeError);
+            expect(() => calc.square({})).toThrow(TypeError);
+            expect(() => calc.square([])).toThrow(TypeError);
+        });
+
+        test('should throw Error for infinite values', () => {
+            expect(() => calc.square(Infinity)).toThrow('Argument must be a finite number');
+            expect(() => calc.square(-Infinity)).toThrow('Argument must be a finite number');
+            expect(() => calc.square(NaN)).toThrow('Argument must be a finite number');
+        });
+
+        test('should save to history with proper format', () => {
+            calc.square(5);
+            expect(calc.getHistory()).toContain('5² = 25');
+        });
+
+        test('should save negative number squares to history', () => {
+            calc.square(-4);
+            expect(calc.getHistory()).toContain('-4² = 16');
+        });
+    });
+
     describe('history management', () => {
         test('should maintain history across multiple operations', () => {
             calc.add(5, 3);
@@ -195,14 +245,16 @@ describe('Calculator', () => {
             calc.divide(10, 2);
             calc.percentage(200, 10);
             calc.percentOf(20, 200);
+            calc.square(5);
             
             const history = calc.getHistory();
-            expect(history).toHaveLength(5);
+            expect(history).toHaveLength(6);
             expect(history[0]).toBe('5 + 3 = 8');
             expect(history[1]).toBe('10 - 4 = 6');
             expect(history[2]).toBe('10 / 2 = 5');
             expect(history[3]).toBe('10% of 200 = 20');
             expect(history[4]).toBe('20 is 10% of 200');
+            expect(history[5]).toBe('5² = 25');
         });
 
         test('should clear history', () => {
