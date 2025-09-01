@@ -41,7 +41,7 @@ class Calculator {
             throw new TypeError('Both arguments must be numbers');
         }
         if (!isFinite(value) || !isFinite(percent)) {
-            throw new Error('Arguments must only be finite numbers');
+            throw new Error('Arguments must be finite numbers');
         }
         
         const result = (value * percent) / 100;
@@ -62,7 +62,7 @@ class Calculator {
             throw new TypeError('Both arguments must be numbers');
         }
         if (!isFinite(part) || !isFinite(whole)) {
-            throw new Error('Arguments must only be finite numbers');
+            throw new Error('Arguments must be finite numbers');
         }
         if (whole === 0) {
             throw new Error('Cannot calculate percentage of zero');
@@ -106,7 +106,7 @@ class Calculator {
             throw new TypeError('Both arguments must be numbers');
         }
         if (!isFinite(a) || !isFinite(b)) {
-            throw new Error('Arguments must only be finite numbers');
+            throw new Error('Arguments must be finite numbers');
         }
         
         const result = Math.min(a, b);

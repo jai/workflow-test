@@ -125,9 +125,9 @@ describe('Calculator', () => {
         });
 
         test('should throw Error for infinite values', () => {
-            expect(() => calc.percentage(Infinity, 10)).toThrow('Arguments must only be finite numbers');
-            expect(() => calc.percentage(100, Infinity)).toThrow('Arguments must only be finite numbers');
-            expect(() => calc.percentage(NaN, 10)).toThrow('Arguments must only be finite numbers');
+            expect(() => calc.percentage(Infinity, 10)).toThrow('Arguments must be finite numbers');
+            expect(() => calc.percentage(100, Infinity)).toThrow('Arguments must be finite numbers');
+            expect(() => calc.percentage(NaN, 10)).toThrow('Arguments must be finite numbers');
         });
 
         test('should save to history', () => {
@@ -177,9 +177,9 @@ describe('Calculator', () => {
         });
 
         test('should throw Error for infinite values', () => {
-            expect(() => calc.percentOf(Infinity, 200)).toThrow('Arguments must only be finite numbers');
-            expect(() => calc.percentOf(20, Infinity)).toThrow('Arguments must only be finite numbers');
-            expect(() => calc.percentOf(NaN, 200)).toThrow('Arguments must only be finite numbers');
+            expect(() => calc.percentOf(Infinity, 200)).toThrow('Arguments must be finite numbers');
+            expect(() => calc.percentOf(20, Infinity)).toThrow('Arguments must be finite numbers');
+            expect(() => calc.percentOf(NaN, 200)).toThrow('Arguments must be finite numbers');
         });
 
         test('should save to history', () => {
@@ -287,12 +287,12 @@ describe('Calculator', () => {
         });
 
         test('should throw Error for infinite values', () => {
-            expect(() => calc.min(Infinity, 5)).toThrow('Arguments must only be finite numbers');
-            expect(() => calc.min(5, Infinity)).toThrow('Arguments must only be finite numbers');
-            expect(() => calc.min(-Infinity, 5)).toThrow('Arguments must only be finite numbers');
-            expect(() => calc.min(5, -Infinity)).toThrow('Arguments must only be finite numbers');
-            expect(() => calc.min(NaN, 5)).toThrow('Arguments must only be finite numbers');
-            expect(() => calc.min(5, NaN)).toThrow('Arguments must only be finite numbers');
+            expect(() => calc.min(Infinity, 5)).toThrow('Arguments must be finite numbers');
+            expect(() => calc.min(5, Infinity)).toThrow('Arguments must be finite numbers');
+            expect(() => calc.min(-Infinity, 5)).toThrow('Arguments must be finite numbers');
+            expect(() => calc.min(5, -Infinity)).toThrow('Arguments must be finite numbers');
+            expect(() => calc.min(NaN, 5)).toThrow('Arguments must be finite numbers');
+            expect(() => calc.min(5, NaN)).toThrow('Arguments must be finite numbers');
         });
 
         test('should save to history with proper format', () => {
