@@ -185,6 +185,7 @@ jobs:
           # Use JAI_GITHUB_PAT for PR creation (has repo scope)
           github_token: ${{ secrets.JAI_GITHUB_PAT }}
           track_progress: ${{ steps.check-track-progress.outputs.track_progress }}
+          use_commit_signing: true
           claude_args: |
             --model claude-opus-4-1-20250805
             --system-prompt "YOU ARE ON BRANCH: ${{ steps.extract-issue.outputs.branch_name }}
