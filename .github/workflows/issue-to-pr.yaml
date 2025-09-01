@@ -104,6 +104,8 @@ jobs:
       - name: Extract issue/PR details
         id: extract-issue
         if: steps.check-permissions.outputs.is_authorized == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           # Check if this is a PR comment or issue comment
           IS_PR="${{ github.event.issue.pull_request != null }}"
