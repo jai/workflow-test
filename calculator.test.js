@@ -238,6 +238,74 @@ describe('Calculator', () => {
         });
     });
 
+    describe('min', () => {
+        test('should return minimum of two positive numbers', () => {
+            expect(calc.min(5, 3)).toBe(3);
+            expect(calc.min(3, 5)).toBe(3);
+        });
+
+        test('should return minimum of two negative numbers', () => {
+            expect(calc.min(-5, -3)).toBe(-5);
+            expect(calc.min(-3, -5)).toBe(-5);
+        });
+
+        test('should return minimum of positive and negative numbers', () => {
+            expect(calc.min(5, -3)).toBe(-3);
+            expect(calc.min(-3, 5)).toBe(-3);
+        });
+
+        test('should handle equal numbers', () => {
+            expect(calc.min(5, 5)).toBe(5);
+            expect(calc.min(-3, -3)).toBe(-3);
+        });
+
+        test('should handle zero', () => {
+            expect(calc.min(0, 5)).toBe(0);
+            expect(calc.min(5, 0)).toBe(0);
+            expect(calc.min(0, -5)).toBe(-5);
+            expect(calc.min(-5, 0)).toBe(-5);
+        });
+
+        test('should handle decimal numbers', () => {
+            expect(calc.min(3.14, 2.71)).toBe(2.71);
+            expect(calc.min(2.71, 3.14)).toBe(2.71);
+            expect(calc.min(-1.5, -2.5)).toBe(-2.5);
+        });
+
+        test('should handle very large numbers', () => {
+            expect(calc.min(1000000, 999999)).toBe(999999);
+            expect(calc.min(-1000000, -999999)).toBe(-1000000);
+        });
+
+        test('should throw TypeError for non-number arguments', () => {
+            expect(() => calc.min('5', 3)).toThrow(TypeError);
+            expect(() => calc.min(5, '3')).toThrow(TypeError);
+            expect(() => calc.min(null, 3)).toThrow(TypeError);
+            expect(() => calc.min(5, undefined)).toThrow(TypeError);
+            expect(() => calc.min({}, 3)).toThrow(TypeError);
+            expect(() => calc.min(5, [])).toThrow(TypeError);
+        });
+
+        test('should throw Error for infinite values', () => {
+            expect(() => calc.min(Infinity, 5)).toThrow('Arguments must be finite numbers');
+            expect(() => calc.min(5, Infinity)).toThrow('Arguments must be finite numbers');
+            expect(() => calc.min(-Infinity, 5)).toThrow('Arguments must be finite numbers');
+            expect(() => calc.min(5, -Infinity)).toThrow('Arguments must be finite numbers');
+            expect(() => calc.min(NaN, 5)).toThrow('Arguments must be finite numbers');
+            expect(() => calc.min(5, NaN)).toThrow('Arguments must be finite numbers');
+        });
+
+        test('should save to history with proper format', () => {
+            calc.min(5, 3);
+            expect(calc.getHistory()).toContain('min(5, 3) = 3');
+        });
+
+        test('should save negative number comparisons to history', () => {
+            calc.min(-4, -8);
+            expect(calc.getHistory()).toContain('min(-4, -8) = -8');
+        });
+    });
+
     describe('history management', () => {
         test('should maintain history across multiple operations', () => {
             calc.add(5, 3);
@@ -246,15 +314,17 @@ describe('Calculator', () => {
             calc.percentage(200, 10);
             calc.percentOf(20, 200);
             calc.square(5);
+            calc.min(8, 3);
             
             const history = calc.getHistory();
-            expect(history).toHaveLength(6);
+            expect(history).toHaveLength(7);
             expect(history[0]).toBe('5 + 3 = 8');
             expect(history[1]).toBe('10 - 4 = 6');
             expect(history[2]).toBe('10 / 2 = 5');
             expect(history[3]).toBe('10% of 200 = 20');
             expect(history[4]).toBe('20 is 10% of 200');
             expect(history[5]).toBe('5² = 25');
+            expect(history[6]).toBe('min(8, 3) = 3');
         });
 
         test('should clear history', () => {

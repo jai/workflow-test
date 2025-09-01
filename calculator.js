@@ -93,6 +93,27 @@ class Calculator {
         return result;
     }
 
+    /**
+     * Calculate the minimum of two numbers
+     * @param {number} a - The first number
+     * @param {number} b - The second number
+     * @returns {number} The minimum of the two numbers
+     * @example min(5, 3) returns 3
+     */
+    min(a, b) {
+        // Handle edge cases
+        if (typeof a !== 'number' || typeof b !== 'number') {
+            throw new TypeError('Both arguments must be numbers');
+        }
+        if (!isFinite(a) || !isFinite(b)) {
+            throw new Error('Arguments must be finite numbers');
+        }
+        
+        const result = Math.min(a, b);
+        this.history.push(`min(${a}, ${b}) = ${result}`);
+        return result;
+    }
+
     getHistory() {
         return this.history;
     }
@@ -111,6 +132,7 @@ console.log(calc.multiply(4, 7));
 console.log(calc.percentage(200, 10));  // 20
 console.log(calc.percentOf(20, 200));   // 10
 console.log(calc.square(5));            // 25
+console.log(calc.min(5, 3));            // 3
 console.log('History:', calc.getHistory());
 
 module.exports = Calculator;
