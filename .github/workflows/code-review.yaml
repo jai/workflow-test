@@ -341,7 +341,7 @@ jobs:
 
           IMPORTANT: This workflow is for CODE REVIEW ONLY. 
           - If the user is asking for code changes, fixes, or implementations, respond with:
-            "To make code changes, please use @claude-implement in your comment instead."
+            'To make code changes, please use @claude-implement in your comment instead.'
           - DO NOT attempt to make any code changes or commits
           - Only provide reviews, answer questions, and give feedback
           
