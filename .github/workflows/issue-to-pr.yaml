@@ -15,11 +15,14 @@ permissions:
 jobs:
   implement-issue:
     runs-on: ubuntu-latest
-    # Only run if comment contains @claude-implement (on issues, not PRs)
+    # Run if:
+    # 1. Issue comment with @claude-implement (not on PRs)
+    # 2. PR comment with @claude (for making changes to existing PRs)
     if: |
-      github.event_name == 'issue_comment' && 
-      contains(github.event.comment.body, '@claude-implement') &&
-      github.event.issue.pull_request == null
+      github.event_name == 'issue_comment' && (
+        (contains(github.event.comment.body, '@claude-implement') && github.event.issue.pull_request == null) ||
+        (contains(github.event.comment.body, '@claude') && github.event.issue.pull_request != null)
+      )
     
     steps:
       # Check permissions
@@ -97,49 +100,84 @@ jobs:
           
           echo "✅ Git configuration complete"
 
-      # Extract issue details
-      - name: Extract issue details
+      # Extract issue/PR details
+      - name: Extract issue/PR details
         id: extract-issue
         if: steps.check-permissions.outputs.is_authorized == 'true'
         run: |
-          # Handle both issue and issue_comment events
-          if [[ "${{ github.event_name }}" == "issues" ]]; then
-            ISSUE_NUMBER="${{ github.event.issue.number }}"
-            ISSUE_TITLE="${{ github.event.issue.title }}"
-            ISSUE_AUTHOR="${{ github.event.issue.user.login }}"
+          # Check if this is a PR comment or issue comment
+          IS_PR="${{ github.event.issue.pull_request != null }}"
+          
+          if [[ "$IS_PR" == "true" ]]; then
+            # This is a PR comment
+            echo "is_pr=true" >> $GITHUB_OUTPUT
+            PR_NUMBER="${{ github.event.issue.number }}"
+            
+            # Get PR details
+            PR_DATA=$(gh pr view $PR_NUMBER --json headRefName,title,author)
+            BRANCH_NAME=$(echo "$PR_DATA" | jq -r '.headRefName')
+            PR_TITLE=$(echo "$PR_DATA" | jq -r '.title')
+            PR_AUTHOR=$(echo "$PR_DATA" | jq -r '.author.login')
+            
+            echo "issue_number=$PR_NUMBER" >> $GITHUB_OUTPUT
+            echo "issue_title=$PR_TITLE" >> $GITHUB_OUTPUT
+            echo "issue_author=$PR_AUTHOR" >> $GITHUB_OUTPUT
+            echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+            
+            echo "📋 PR #$PR_NUMBER: $PR_TITLE"
+            echo "👤 Author: @$PR_AUTHOR"
+            echo "🌿 Existing Branch: $BRANCH_NAME"
           else
-            # For issue_comment event
-            ISSUE_NUMBER="${{ github.event.issue.number }}"
-            ISSUE_TITLE="${{ github.event.issue.title }}"
-            ISSUE_AUTHOR="${{ github.event.comment.user.login }}"
+            # This is an issue comment
+            echo "is_pr=false" >> $GITHUB_OUTPUT
+            
+            # Handle both issue and issue_comment events
+            if [[ "${{ github.event_name }}" == "issues" ]]; then
+              ISSUE_NUMBER="${{ github.event.issue.number }}"
+              ISSUE_TITLE="${{ github.event.issue.title }}"
+              ISSUE_AUTHOR="${{ github.event.issue.user.login }}"
+            else
+              # For issue_comment event
+              ISSUE_NUMBER="${{ github.event.issue.number }}"
+              ISSUE_TITLE="${{ github.event.issue.title }}"
+              ISSUE_AUTHOR="${{ github.event.comment.user.login }}"
+            fi
+            
+            echo "issue_number=$ISSUE_NUMBER" >> $GITHUB_OUTPUT
+            echo "issue_title=$ISSUE_TITLE" >> $GITHUB_OUTPUT
+            echo "issue_author=$ISSUE_AUTHOR" >> $GITHUB_OUTPUT
+            
+            # Create branch name from issue title
+            BRANCH_NAME="claude/issue-${ISSUE_NUMBER}-$(echo "$ISSUE_TITLE" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//' | sed 's/-$//' | cut -c1-50)"
+            echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+            
+            echo "📋 Issue #$ISSUE_NUMBER: $ISSUE_TITLE"
+            echo "👤 Author: @$ISSUE_AUTHOR"
+            echo "🌿 Branch: $BRANCH_NAME"
           fi
-          
-          echo "issue_number=$ISSUE_NUMBER" >> $GITHUB_OUTPUT
-          echo "issue_title=$ISSUE_TITLE" >> $GITHUB_OUTPUT
-          echo "issue_author=$ISSUE_AUTHOR" >> $GITHUB_OUTPUT
-          
-          # Create branch name from issue title
-          BRANCH_NAME="claude/issue-${ISSUE_NUMBER}-$(echo "$ISSUE_TITLE" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//' | sed 's/-$//' | cut -c1-50)"
-          echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
-          
-          echo "📋 Issue #$ISSUE_NUMBER: $ISSUE_TITLE"
-          echo "👤 Author: @$ISSUE_AUTHOR"
-          echo "🌿 Branch: $BRANCH_NAME"
 
-      # Create new branch
-      - name: Create implementation branch
-        id: create-branch
+      # Create new branch or checkout existing PR branch
+      - name: Setup branch
+        id: setup-branch
         if: steps.check-permissions.outputs.is_authorized == 'true'
         run: |
           BRANCH_NAME="${{ steps.extract-issue.outputs.branch_name }}"
+          IS_PR="${{ steps.extract-issue.outputs.is_pr }}"
           
-          # Create and checkout new branch
-          git checkout -b "$BRANCH_NAME"
-          
-          # Push the branch immediately so it exists on remote
-          git push -u origin "$BRANCH_NAME"
-          
-          echo "✅ Created and pushed branch: $BRANCH_NAME"
+          if [[ "$IS_PR" == "true" ]]; then
+            # For PRs, fetch and checkout the existing branch
+            echo "🔄 Checking out existing PR branch: $BRANCH_NAME"
+            git fetch origin "$BRANCH_NAME"
+            git checkout "$BRANCH_NAME"
+            git pull origin "$BRANCH_NAME"
+            echo "✅ Switched to PR branch: $BRANCH_NAME"
+          else
+            # For issues, create and push new branch
+            echo "🌿 Creating new branch: $BRANCH_NAME"
+            git checkout -b "$BRANCH_NAME"
+            git push -u origin "$BRANCH_NAME"
+            echo "✅ Created and pushed branch: $BRANCH_NAME"
+          fi
 
       # Post initial comment
       - name: Post starting comment
@@ -147,7 +185,26 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh issue comment ${{ steps.extract-issue.outputs.issue_number }} --body "🤖 **Claude is implementing this issue**
+          IS_PR="${{ steps.extract-issue.outputs.is_pr }}"
+          ISSUE_NUMBER="${{ steps.extract-issue.outputs.issue_number }}"
+          BRANCH_NAME="${{ steps.extract-issue.outputs.branch_name }}"
+          
+          if [[ "$IS_PR" == "true" ]]; then
+            # For PRs, post a different message
+            gh pr comment $ISSUE_NUMBER --body "🤖 **Claude is making changes to this PR**
+
+          I'm now working on the requested changes. I'll:
+          1. Analyze your request
+          2. Make the necessary code changes
+          3. Commit and push to the PR branch
+          4. Update you when complete
+
+          Branch: \`$BRANCH_NAME\`
+          
+          _This is an automated update by Claude Opus 4.1_"
+          else
+            # For issues, post the original message
+            gh issue comment $ISSUE_NUMBER --body "🤖 **Claude is implementing this issue**
 
           I'm now working on implementing the requirements from this issue. I'll:
           1. Analyze the requirements
@@ -155,9 +212,10 @@ jobs:
           3. Create tests if applicable
           4. Open a PR when complete
 
-          Branch: \`${{ steps.extract-issue.outputs.branch_name }}\`
+          Branch: \`$BRANCH_NAME\`
           
           _This is an automated implementation by Claude Opus 4.1_"
+          fi
 
       # Determine if track_progress is supported for this event
       - name: Check track_progress support
@@ -246,16 +304,18 @@ jobs:
           prompt: |
             REPO: ${{ github.repository }}
             ISSUE NUMBER: ${{ steps.extract-issue.outputs.issue_number }}
+            IS_PR: ${{ steps.extract-issue.outputs.is_pr }}
             
-            ## Task: Implement GitHub Issue
+            ${{ steps.extract-issue.outputs.is_pr == 'true' && '## Task: Update Pull Request' || '## Task: Implement GitHub Issue' }}
             
-            You need to implement the solution for issue #${{ steps.extract-issue.outputs.issue_number }}.
+            ${{ steps.extract-issue.outputs.is_pr == 'true' && format('You need to make changes to PR #{0} based on the comment requesting changes.', steps.extract-issue.outputs.issue_number) || format('You need to implement the solution for issue #{0}.', steps.extract-issue.outputs.issue_number) }}
             
             ### Instructions:
             
             1. **Understand the requirements**: 
-               - Get the issue details using mcp__github__get_issue
-               - Review any comments with mcp__github__get_issue_comments
+               ${{ steps.extract-issue.outputs.is_pr == 'true' && '- Get the PR details using mcp__github__get_pull_request' || '- Get the issue details using mcp__github__get_issue' }}
+               - Review any comments with ${{ steps.extract-issue.outputs.is_pr == 'true' && 'mcp__github__get_pull_request_comments' || 'mcp__github__get_issue_comments' }}
+               ${{ steps.extract-issue.outputs.is_pr == 'true' && '- Focus on the specific changes requested in the @claude comment' || '' }}
             
             2. **Implement the solution**:
                - Read existing files using mcp__github__get_file_contents or Read tool
@@ -265,34 +325,37 @@ jobs:
                - Include tests where applicable
             
             3. **Save your work**:
-               - Use git commands to commit changes (for GPG signing): git add -A && git commit -m 'feat: your message'
+               - Use git commands to commit changes (for GPG signing): git add -A && git commit -m '${{ steps.extract-issue.outputs.is_pr == 'true' && 'fix: ' || 'feat: ' }}your message'
                - Create atomic, well-described commits
                - Use conventional commit format (feat:, fix:, docs:, etc.)
-               - Reference issue #${{ steps.extract-issue.outputs.issue_number }} in commit messages
-               - The branch "${{ steps.extract-issue.outputs.branch_name }}" has already been created for you
+               - Reference ${{ steps.extract-issue.outputs.is_pr == 'true' && 'PR' || 'issue' }} #${{ steps.extract-issue.outputs.issue_number }} in commit messages
+               - The branch "${{ steps.extract-issue.outputs.branch_name }}" has already been ${{ steps.extract-issue.outputs.is_pr == 'true' && 'checked out' || 'created' }} for you
                - Push your changes: git push
             
-            4. **Create the Pull Request** (MANDATORY):
+            ${{ steps.extract-issue.outputs.is_pr == 'true' && '### Critical Requirements:
+            - You are working on an existing PR - just push your changes
+            - Do NOT create a new PR
+            - The PR already exists as PR #' || '4. **Create the Pull Request** (MANDATORY):
                YOU MUST create a pull request using mcp__github__create_pull_request tool:
                - title: "feat: Clear description of what you implemented"
-               - body: "Fixes #${{ steps.extract-issue.outputs.issue_number }}\n\n## Summary\n[Your summary here]"
+               - body: "Fixes #' }}${{ steps.extract-issue.outputs.issue_number }}${{ steps.extract-issue.outputs.is_pr == 'true' && '' || '\n\n## Summary\n[Your summary here]"
                - base: "master"
-               - head: "${{ steps.extract-issue.outputs.branch_name }}"
+               - head: "' }}${{ steps.extract-issue.outputs.is_pr == 'true' && '' || steps.extract-issue.outputs.branch_name }}${{ steps.extract-issue.outputs.is_pr == 'true' && '' || '"
                
                If MCP tool fails, use gh CLI as fallback:
-               gh pr create --title "feat: [description]" --body "Fixes #${{ steps.extract-issue.outputs.issue_number }}" --base master --head ${{ steps.extract-issue.outputs.branch_name }}
+               gh pr create --title "feat: [description]" --body "Fixes #' }}${{ steps.extract-issue.outputs.is_pr == 'true' && '' || steps.extract-issue.outputs.issue_number }}${{ steps.extract-issue.outputs.is_pr == 'true' && '' || '" --base master --head ' }}${{ steps.extract-issue.outputs.is_pr == 'true' && '' || steps.extract-issue.outputs.branch_name }}
             
             ### Critical Requirements:
             - You are already on branch: ${{ steps.extract-issue.outputs.branch_name }}
             - Do NOT create a new branch
-            - You MUST create a PR - the task is incomplete without it
-            - If one PR method fails, try the other
+            ${{ steps.extract-issue.outputs.is_pr == 'true' && '- Do NOT create a new PR - you are updating an existing one' || '- You MUST create a PR - the task is incomplete without it' }}
+            ${{ steps.extract-issue.outputs.is_pr == 'true' && '' || '- If one PR method fails, try the other' }}
             
-            FAILURE TO CREATE A PR MEANS THE TASK IS INCOMPLETE.
+            ${{ steps.extract-issue.outputs.is_pr == 'true' && '' || 'FAILURE TO CREATE A PR MEANS THE TASK IS INCOMPLETE.' }}
 
-      # Post-processing: Create PR if Claude didn't
+      # Post-processing: Create PR if Claude didn't (only for issues, not PR updates)
       - name: Ensure PR is created
-        if: steps.check-permissions.outputs.is_authorized == 'true'
+        if: steps.check-permissions.outputs.is_authorized == 'true' && steps.extract-issue.outputs.is_pr != 'true'
         env:
           # Use JAI_GITHUB_PAT for PR creation (has repo scope)
           GH_TOKEN: ${{ secrets.JAI_GITHUB_PAT }}
@@ -352,3 +415,34 @@ jobs:
           else
             echo "✅ PR #$EXISTING_PR already exists"
           fi
+      
+      # Post completion comment
+      - name: Post completion comment
+        if: steps.check-permissions.outputs.is_authorized == 'true'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.JAI_GITHUB_PAT }}
+          script: |
+            const isPR = '${{ steps.extract-issue.outputs.is_pr }}' === 'true';
+            const issueNumber = parseInt('${{ steps.extract-issue.outputs.issue_number }}');
+            
+            let comment;
+            if (isPR) {
+              comment = `✅ **Changes Applied**
+              
+              The requested changes have been applied to this PR and pushed to the branch.
+              
+              Branch: \`${{ steps.extract-issue.outputs.branch_name }}\`
+              
+              _Changes applied by Claude Opus 4.1 🤖_`;
+            } else {
+              // For issues, the comment is already posted by the Ensure PR step
+              return;
+            }
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              body: comment
+            });
