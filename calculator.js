@@ -11,6 +11,12 @@ class Calculator {
         return result;
     }
 
+    subtract(a, b) {
+        const result = a - b;
+        this.history.push(`${a} - ${b} = ${result}`);
+        return result;
+    }
+
     divide(a, b) {
         // TODO: Add zero check
         const result = a / b;
@@ -79,6 +85,7 @@ class Calculator {
 // Example usage
 const calc = new Calculator();
 console.log(calc.add(5, 3));
+console.log(calc.subtract(10, 4));
 console.log(calc.divide(10, 2));
 console.log(calc.multiply(4, 7));
 console.log(calc.percentage(200, 10));  // 20
