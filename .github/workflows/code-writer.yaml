@@ -19,6 +19,8 @@ jobs:
       - uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          additional_permissions: |
+            actions: read
           prompt: |
             User comment: ${{ github.event.comment.body }}
             
