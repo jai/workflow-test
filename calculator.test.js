@@ -238,6 +238,100 @@ describe('Calculator', () => {
         });
     });
 
+    describe('root', () => {
+        test('should calculate square root by default', () => {
+            expect(calc.root(16)).toBe(4);
+            expect(calc.root(25)).toBe(5);
+            expect(calc.root(9)).toBe(3);
+        });
+
+        test('should calculate cube root', () => {
+            expect(calc.root(27, 3)).toBe(3);
+            expect(calc.root(8, 3)).toBe(2);
+            expect(calc.root(125, 3)).toBe(5);
+        });
+
+        test('should calculate fourth root', () => {
+            expect(calc.root(16, 4)).toBe(2);
+            expect(calc.root(81, 4)).toBe(3);
+        });
+
+        test('should handle root of zero', () => {
+            expect(calc.root(0)).toBe(0);
+            expect(calc.root(0, 3)).toBe(0);
+        });
+
+        test('should handle root of one', () => {
+            expect(calc.root(1)).toBe(1);
+            expect(calc.root(1, 3)).toBe(1);
+            expect(calc.root(1, 10)).toBe(1);
+        });
+
+        test('should handle decimal values', () => {
+            expect(calc.root(2.25)).toBe(1.5);
+            expect(calc.root(0.25)).toBe(0.5);
+        });
+
+        test('should handle negative values with odd roots', () => {
+            expect(calc.root(-27, 3)).toBe(-3);
+            expect(calc.root(-1, 3)).toBe(-1);
+            expect(calc.root(-32, 5)).toBe(-2);
+        });
+
+        test('should throw Error for negative values with even roots', () => {
+            expect(() => calc.root(-16)).toThrow('Cannot calculate even root of negative number');
+            expect(() => calc.root(-16, 2)).toThrow('Cannot calculate even root of negative number');
+            expect(() => calc.root(-16, 4)).toThrow('Cannot calculate even root of negative number');
+        });
+
+        test('should throw Error when root degree is zero', () => {
+            expect(() => calc.root(16, 0)).toThrow('Root degree cannot be zero');
+        });
+
+        test('should handle negative root degree (reciprocal)', () => {
+            expect(calc.root(4, -2)).toBe(0.5); // 4^(-1/2) = 1/2
+            expect(calc.root(8, -3)).toBe(0.5); // 8^(-1/3) = 1/2
+        });
+
+        test('should throw TypeError for non-number arguments', () => {
+            expect(() => calc.root('16')).toThrow(TypeError);
+            expect(() => calc.root(16, '2')).toThrow(TypeError);
+            expect(() => calc.root(null, 2)).toThrow(TypeError);
+            expect(() => calc.root(16, undefined)).toThrow(TypeError);
+        });
+
+        test('should throw Error for infinite values', () => {
+            expect(() => calc.root(Infinity, 2)).toThrow('Arguments must be finite numbers');
+            expect(() => calc.root(16, Infinity)).toThrow('Arguments must be finite numbers');
+            expect(() => calc.root(NaN, 2)).toThrow('Arguments must be finite numbers');
+        });
+
+        test('should save square root to history with √ symbol', () => {
+            calc.root(16);
+            expect(calc.getHistory()).toContain('√16 = 4');
+        });
+
+        test('should save cube root to history with ∛ symbol', () => {
+            calc.root(27, 3);
+            expect(calc.getHistory()).toContain('∛27 = 3');
+        });
+
+        test('should save other roots to history with n√ format', () => {
+            calc.root(16, 4);
+            expect(calc.getHistory()).toContain('4√16 = 2');
+        });
+
+        test('should handle very small positive numbers', () => {
+            expect(calc.root(0.0001)).toBeCloseTo(0.01);
+            expect(calc.root(0.000001, 3)).toBeCloseTo(0.01);
+        });
+
+        test('should handle fractional root degrees', () => {
+            expect(calc.root(16, 2.5)).toBeCloseTo(2.297397, 5);
+            expect(calc.root(27, 1.5)).toBeCloseTo(9, 5);
+        });
+    });
+
     describe('history management', () => {
         test('should maintain history across multiple operations', () => {
             calc.add(5, 3);
@@ -246,15 +340,19 @@ describe('Calculator', () => {
             calc.percentage(200, 10);
             calc.percentOf(20, 200);
             calc.square(5);
+            calc.root(16);
+            calc.root(27, 3);
             
             const history = calc.getHistory();
-            expect(history).toHaveLength(6);
+            expect(history).toHaveLength(8);
             expect(history[0]).toBe('5 + 3 = 8');
             expect(history[1]).toBe('10 - 4 = 6');
             expect(history[2]).toBe('10 / 2 = 5');
             expect(history[3]).toBe('10% of 200 = 20');
             expect(history[4]).toBe('20 is 10% of 200');
             expect(history[5]).toBe('5² = 25');
+            expect(history[6]).toBe('√16 = 4');
+            expect(history[7]).toBe('∛27 = 3');
         });
 
         test('should clear history', () => {
