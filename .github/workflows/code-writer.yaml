@@ -1,0 +1,185 @@
+name: Code Writer
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  actions: read
+
+jobs:
+  write-code:
+    runs-on: ubuntu-latest
+    # Only run if comment contains @claude-implement
+    if: |
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude-implement')) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude-implement'))
+    
+    steps:
+      # Check permissions first
+      - name: Check actor permissions
+        id: check-permissions
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PERMISSION=$(gh api repos/${{ github.repository }}/collaborators/${{ github.actor }}/permission --jq .permission 2>/dev/null || echo "none")
+          echo "Actor (${{ github.actor }}) has '${PERMISSION}' permission on this repository."
+          if [[ "$PERMISSION" == "admin" || "$PERMISSION" == "maintain" || "$PERMISSION" == "write" ]]; then
+            echo "is_authorized=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_authorized=false" >> $GITHUB_OUTPUT
+            echo "::error::Actor does not have write, maintain, or admin permissions on this repository"
+            exit 1
+          fi
+
+      # Extract context (issue vs PR)
+      - name: Extract context
+        id: extract-context
+        if: steps.check-permissions.outputs.is_authorized == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request_review_comment" ]]; then
+            # Inline PR comment
+            echo "context_type=pr_inline" >> $GITHUB_OUTPUT
+            echo "number=${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
+            echo "comment_id=${{ github.event.comment.id }}" >> $GITHUB_OUTPUT
+            echo "file_path=${{ github.event.comment.path }}" >> $GITHUB_OUTPUT
+            echo "line=${{ github.event.comment.line || github.event.comment.original_line }}" >> $GITHUB_OUTPUT
+            echo "📝 Inline comment on PR #${{ github.event.pull_request.number }}"
+          elif [[ "${{ github.event.issue.pull_request }}" != "" ]]; then
+            # PR comment
+            echo "context_type=pr" >> $GITHUB_OUTPUT
+            echo "number=${{ github.event.issue.number }}" >> $GITHUB_OUTPUT
+            echo "💬 PR comment on #${{ github.event.issue.number }}"
+          else
+            # Issue comment
+            echo "context_type=issue" >> $GITHUB_OUTPUT
+            echo "number=${{ github.event.issue.number }}" >> $GITHUB_OUTPUT
+            echo "📋 Issue comment on #${{ github.event.issue.number }}"
+          fi
+          
+          # Extract comment body
+          echo "comment_body<<EOF" >> $GITHUB_OUTPUT
+          echo "${{ github.event.comment.body }}" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      # Post starting comment
+      - name: Post starting comment
+        if: steps.check-permissions.outputs.is_authorized == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          CONTEXT_TYPE="${{ steps.extract-context.outputs.context_type }}"
+          NUMBER="${{ steps.extract-context.outputs.number }}"
+          
+          if [[ "$CONTEXT_TYPE" == "pr_inline" ]]; then
+            # Reply to inline comment
+            gh api -X POST /repos/${{ github.repository }}/pulls/$NUMBER/comments \
+              -f body="🤖 Working on the requested changes..." \
+              -F in_reply_to=${{ steps.extract-context.outputs.comment_id }}
+          elif [[ "$CONTEXT_TYPE" == "pr" ]]; then
+            gh pr comment $NUMBER --body "🤖 **Working on the requested changes**
+
+I'll analyze your request and make the necessary code changes to this PR.
+
+_Processing with Claude Opus 4.1..._"
+          else
+            gh issue comment $NUMBER --body "🤖 **Starting implementation**
+
+I'll implement the requested changes and create a pull request.
+
+_Processing with Claude Opus 4.1..._"
+          fi
+
+      # Main Claude action - it handles branch creation/checkout automatically
+      - uses: anthropics/claude-code-action@v1
+        if: steps.check-permissions.outputs.is_authorized == 'true'
+        with:
+          # Use oauth token if available, otherwise API key
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.JAI_GITHUB_PAT || secrets.GITHUB_TOKEN }}
+          # Enable progress tracking for better UX
+          track_progress: true
+          # Configure GPG signing if available
+          use_commit_signing: ${{ vars.GPG_KEY_ID != '' }}
+          git_config_user_name: "GitHub Actions Bot"
+          git_config_user_email: "jai@govindani.com"
+          # Additional permissions for CI access
+          additional_permissions: |
+            actions: read
+          # Model and tools configuration
+          claude_args: |
+            --model claude-opus-4-1-20250805
+            --allowedTools "mcp__github__create_issue_comment,
+            mcp__github__create_pull_request,
+            mcp__github__get_file_contents,
+            mcp__github__create_or_update_file,
+            mcp__github__get_issue,
+            mcp__github__get_issue_comments,
+            mcp__github__get_pull_request,
+            mcp__github__get_pull_request_comments,
+            mcp__github__get_pull_request_diff,
+            mcp__github__list_pull_request_files,
+            mcp__github_ci__get_ci_status,
+            mcp__github_ci__get_workflow_run_details,
+            mcp__github_ci__download_job_log,
+            Bash,Read,Write,Edit,MultiEdit,Grep,Glob,WebFetch,WebSearch,TodoWrite"
+          prompt: |
+            REPOSITORY: ${{ github.repository }}
+            CONTEXT: ${{ steps.extract-context.outputs.context_type }}
+            NUMBER: #${{ steps.extract-context.outputs.number }}
+            
+            ## User Request:
+            ${{ steps.extract-context.outputs.comment_body }}
+            
+            ---
+            
+            ## Instructions:
+            
+            Based on the context type (${{ steps.extract-context.outputs.context_type }}), perform the following:
+            
+            ${{ steps.extract-context.outputs.context_type == 'issue' && 
+            '### For Issue:
+            1. Understand the requirements from issue #' || '' }}${{ steps.extract-context.outputs.context_type == 'issue' && steps.extract-context.outputs.number || '' }}${{ steps.extract-context.outputs.context_type == 'issue' && '
+            2. Implement the requested functionality
+            3. Create appropriate tests if applicable
+            4. The action will automatically create a branch and PR for you
+            5. Reference issue #' || '' }}${{ steps.extract-context.outputs.context_type == 'issue' && steps.extract-context.outputs.number || '' }}${{ steps.extract-context.outputs.context_type == 'issue' && ' in your commits
+            
+            ' || '' }}${{ steps.extract-context.outputs.context_type == 'pr' && 
+            '### For PR:
+            1. Review the existing PR #' || '' }}${{ steps.extract-context.outputs.context_type == 'pr' && steps.extract-context.outputs.number || '' }}${{ steps.extract-context.outputs.context_type == 'pr' && '
+            2. Make the requested changes directly to the PR branch
+            3. The action will automatically push to the existing PR
+            4. Reference PR #' || '' }}${{ steps.extract-context.outputs.context_type == 'pr' && steps.extract-context.outputs.number || '' }}${{ steps.extract-context.outputs.context_type == 'pr' && ' in your commits
+            
+            ' || '' }}${{ steps.extract-context.outputs.context_type == 'pr_inline' && 
+            '### For Inline PR Comment:
+            1. Focus on the specific code at ' || '' }}${{ steps.extract-context.outputs.context_type == 'pr_inline' && steps.extract-context.outputs.file_path || '' }}${{ steps.extract-context.outputs.context_type == 'pr_inline' && ':' || '' }}${{ steps.extract-context.outputs.context_type == 'pr_inline' && steps.extract-context.outputs.line || '' }}${{ steps.extract-context.outputs.context_type == 'pr_inline' && '
+            2. Make the requested changes to address the inline comment
+            3. Push changes to PR #' || '' }}${{ steps.extract-context.outputs.context_type == 'pr_inline' && steps.extract-context.outputs.number || '' }}${{ steps.extract-context.outputs.context_type == 'pr_inline' && '
+            4. The changes will be automatically pushed to the PR
+            
+            ' || '' }}### General Guidelines:
+            - Write clean, maintainable code following existing patterns
+            - Include appropriate error handling
+            - Add comments for complex logic
+            - Follow the repository's coding standards
+            - If tests exist, ensure they pass
+            - Use conventional commit messages (feat:, fix:, docs:, etc.)
+            
+            ### Important:
+            - The claude-code-action handles branch management automatically
+            - For issues: it creates a new branch and PR
+            - For open PRs: it pushes to the existing branch
+            - For closed PRs: it creates a new branch
+            - You don't need to manually create branches or PRs
+            
+            Focus on implementing the requested changes. The action will handle the git operations.
