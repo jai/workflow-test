@@ -106,7 +106,7 @@ class Calculator {
             throw new TypeError('Both arguments must be numbers');
         }
         if (!isFinite(a) || !isFinite(b)) {
-            throw new Error('Arguments must be finite numbers');
+            throw new Error('Arguments must only be finite numbers');
         }
         
         const result = Math.min(a, b);
