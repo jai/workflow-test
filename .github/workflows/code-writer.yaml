@@ -60,12 +60,11 @@ jobs:
             mcp__github_pulls__list_pull_request_files,
             mcp__github_pulls__get_pull_request_diff,
             Bash,Read,Write,Edit,MultiEdit,NotebookEdit,Grep,Glob,WebFetch,WebSearch,TodoWrite"
-          prompt: |
-            User comment: ${{ github.event.comment.body }}
-            
-            Analyze the context and implement the requested changes:
-            - If this is an issue, implement the solution
-            - If this is a PR, make the requested changes to the PR
-            
-            Commit your changes with appropriate commit messages.
-            The action will handle branch management automatically.
+          # prompt: |
+          #   User comment: ${{ github.event.comment.body }}
+          #   
+          #   Analyze the context and implement the requested changes:
+          #   - If this is an issue, implement the solution
+          #   - If this is a PR, make the requested changes to the PR
+          #   
+          #   Commit your changes with conventional commits message format.
