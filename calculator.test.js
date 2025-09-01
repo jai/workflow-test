@@ -27,6 +27,29 @@ describe('Calculator', () => {
         });
     });
 
+    describe('subtract', () => {
+        test('should subtract two positive numbers', () => {
+            expect(calc.subtract(10, 4)).toBe(6);
+        });
+
+        test('should subtract negative numbers', () => {
+            expect(calc.subtract(-5, -3)).toBe(-2);
+        });
+
+        test('should subtract mixed positive and negative', () => {
+            expect(calc.subtract(5, -3)).toBe(8);
+        });
+
+        test('should handle when result is negative', () => {
+            expect(calc.subtract(3, 5)).toBe(-2);
+        });
+
+        test('should save to history', () => {
+            calc.subtract(10, 4);
+            expect(calc.getHistory()).toContain('10 - 4 = 6');
+        });
+    });
+
     describe('divide', () => {
         test('should divide two numbers', () => {
             expect(calc.divide(10, 2)).toBe(5);
@@ -168,16 +191,18 @@ describe('Calculator', () => {
     describe('history management', () => {
         test('should maintain history across multiple operations', () => {
             calc.add(5, 3);
+            calc.subtract(10, 4);
             calc.divide(10, 2);
             calc.percentage(200, 10);
             calc.percentOf(20, 200);
             
             const history = calc.getHistory();
-            expect(history).toHaveLength(4);
+            expect(history).toHaveLength(5);
             expect(history[0]).toBe('5 + 3 = 8');
-            expect(history[1]).toBe('10 / 2 = 5');
-            expect(history[2]).toBe('10% of 200 = 20');
-            expect(history[3]).toBe('20 is 10% of 200');
+            expect(history[1]).toBe('10 - 4 = 6');
+            expect(history[2]).toBe('10 / 2 = 5');
+            expect(history[3]).toBe('10% of 200 = 20');
+            expect(history[4]).toBe('20 is 10% of 200');
         });
 
         test('should clear history', () => {
