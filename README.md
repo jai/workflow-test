@@ -36,3 +36,5 @@ This repository includes an automated code review workflow powered by Claude tha
 The workflow requires the following secrets:
 - `CLAUDE_CODE_OAUTH_TOKEN`: Authentication token for Claude Code action
 - `GITHUB_TOKEN`: Automatically provided by GitHub Actions
+
+Test case without GrowthBook link.
