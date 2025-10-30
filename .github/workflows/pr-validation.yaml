@@ -155,21 +155,9 @@ jobs:
               echo "🤖 Skipping Linear ticket check for automation account: $PR_AUTHOR"
               VALIDATION_RESULT+="🤖 Linear ticket check skipped for automation account"$'\n'
           else
-              echo "👤 Checking Linear ticket requirement for user: $PR_AUTHOR"
-
-              # Check if Linear bot has commented on the PR (indicating proper Linear linking)
-              LINEAR_BOT_COMMENT=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
-                "https://api.github.com/repos/$REPOSITORY/issues/$PR_NUMBER/comments" | \
-                jq -r '.[] | select(.user.login == "linear[bot]") | .id' | head -1)
-
-              if [[ -n "$LINEAR_BOT_COMMENT" ]]; then
-                  echo "✅ Linear bot comment found, PR is properly linked to Linear issue"
-                  VALIDATION_RESULT+="✅ **Linear Ticket:** Properly linked"$'\n'
-              else
-                  echo "❌ No Linear bot comment found. Please ensure the PR is properly linked to a Linear issue."
-                  VALIDATION_RESULT+="❌ **Linear Ticket:** Not linked"$'\n'
-                  VALIDATION_STATUS="failure"
-              fi
+              echo "ℹ️ Skipping Linear ticket requirement check for test repository"
+              LINEAR_BOT_COMMENT="test-skip"
+              VALIDATION_RESULT+="ℹ️ **Linear Ticket:** Check skipped for test repository"$'\n'
           fi
 
           # Check GrowthBook feature flag or experiment link (skip for automation accounts)
