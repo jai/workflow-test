@@ -1,0 +1,11 @@
+policy:
+  approval: []
+approval_rules:
+  - name: growthbook-required
+    requires:
+      count: 0
+      conditions:
+        has_status:
+          conclusions: [success]
+          statuses:
+            - Validate GrowthBook Link
