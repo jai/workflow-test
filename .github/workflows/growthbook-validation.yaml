@@ -177,9 +177,12 @@ jobs:
           VALIDATION_RESULT+="**Validation Results:**"$'\n\n'
 
           echo "🔍 Checking for GrowthBook feature or experiment link in PR description"
-          GROWTHBOOK_PATTERN='https://app\\.growthbook\\.io/'
-          GROWTHBOOK_PATTERN+='(features|experiment)/[A-Za-z0-9._-]+'
-          GROWTHBOOK_LINK=$(echo "$BODY" | grep -Eo "$GROWTHBOOK_PATTERN" | head -1 || true)
+          GROWTHBOOK_PATTERN='https://app\.growthbook\.io/(features|experiment)/[A-Za-z0-9._-]+'
+          GROWTHBOOK_LINK=""
+
+          if [[ "$BODY" =~ $GROWTHBOOK_PATTERN ]]; then
+              GROWTHBOOK_LINK="${BASH_REMATCH[0]}"
+          fi
 
           if should_allow_growthbook_override; then
               echo "✅ GrowthBook link requirement satisfied via approved 'no experiment' declaration by $OVERRIDE_USER."
