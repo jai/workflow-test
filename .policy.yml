@@ -1,0 +1,3 @@
+checks:
+  - name: Validate GrowthBook Link
+    description: Require GrowthBook link for testing
