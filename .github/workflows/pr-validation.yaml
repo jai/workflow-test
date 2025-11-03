@@ -19,8 +19,6 @@ jobs:
   pr_description:
     name: Validate Required PR Description
     runs-on: ubuntu-latest
-    env:
-      GROWTHBOOK_SKIP_USERS: jai maetolay poom andrew-ivashev
     # Please read the following document
     # https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstepscontinue-on-error
     # This doesn't mean that author can merge if the job fails.
@@ -45,7 +43,6 @@ jobs:
           # Initialize validation result output
           VALIDATION_RESULT=""
           VALIDATION_STATUS="success"
-          MISSING_GROWTHBOOK_LINK="false"
 
           # Use a case-insensitive regex to match the checkbox text
           MARKED="\[x\] I have"
@@ -54,21 +51,6 @@ jobs:
           BODY=${BODY,,}
 
           CHECKED_COUNT=$(echo "$BODY" | grep -ic "$MARKED")
-
-          # Helper: determine if GrowthBook check can be bypassed
-          should_allow_growthbook_override() {
-              local author="$1"
-              local body="$2"
-              local -a approved_users
-              read -ra approved_users <<< "$GROWTHBOOK_SKIP_USERS"
-
-              for user in "${approved_users[@]}"; do
-                  if [[ "$author" == "$user" ]] && grep -qi "no experiment" <<< "$body"; then
-                      return 0
-                  fi
-              done
-              return 1
-          }
 
           # Skip validation for release PRs with enhanced security checks
           # 1. Must be authored by finn-devops
@@ -155,31 +137,20 @@ jobs:
               echo "🤖 Skipping Linear ticket check for automation account: $PR_AUTHOR"
               VALIDATION_RESULT+="🤖 Linear ticket check skipped for automation account"$'\n'
           else
-              echo "ℹ️ Skipping Linear ticket requirement check for test repository"
-              LINEAR_BOT_COMMENT="test-skip"
-              VALIDATION_RESULT+="ℹ️ **Linear Ticket:** Check skipped for test repository"$'\n'
-          fi
+              echo "👤 Checking Linear ticket requirement for user: $PR_AUTHOR"
 
-          # Check GrowthBook feature flag or experiment link (skip for automation accounts)
-          if [[ "$PR_AUTHOR" == "finn-devops" ]]; then
-              echo "🤖 Skipping GrowthBook link check for automation account: $PR_AUTHOR"
-              VALIDATION_RESULT+="🤖 GrowthBook link check skipped for automation account"$'\n'
-          else
-              echo "🔍 Checking for GrowthBook feature or experiment link in PR description"
-              GROWTHBOOK_LINK=$(echo "$BODY" | grep -Eo 'https://app\.growthbook\.io/(features|experiment)/[A-Za-z0-9._-]+' | head -1 || true)
+              # Check if Linear bot has commented on the PR (indicating proper Linear linking)
+              LINEAR_BOT_COMMENT=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+                "https://api.github.com/repos/$REPOSITORY/issues/$PR_NUMBER/comments" | \
+                jq -r '.[] | select(.user.login == "linear[bot]") | .id' | head -1)
 
-              if should_allow_growthbook_override "$PR_AUTHOR" "$BODY"; then
-                  echo "✅ GrowthBook link requirement satisfied via approved 'no experiment' declaration by $PR_AUTHOR."
-                  VALIDATION_RESULT+="✅ **GrowthBook Coverage:** No experiment (approved override by $PR_AUTHOR)"$'\n'
-              elif [[ -n "$GROWTHBOOK_LINK" ]]; then
-                  echo "✅ GrowthBook link found: $GROWTHBOOK_LINK"
-                  VALIDATION_RESULT+="✅ **GrowthBook Coverage:** Link found ($GROWTHBOOK_LINK)"$'\n'
+              if [[ -n "$LINEAR_BOT_COMMENT" ]]; then
+                  echo "✅ Linear bot comment found, PR is properly linked to Linear issue"
+                  VALIDATION_RESULT+="✅ **Linear Ticket:** Properly linked"$'\n'
               else
-                  echo "❌ Missing GrowthBook feature flag or experiment link."
-                  VALIDATION_RESULT+="❌ **GrowthBook Coverage:** Missing GrowthBook feature flag or experiment link"$'\n'
-                  VALIDATION_RESULT+="   Expected formats: https://app.growthbook.io/features/... or https://app.growthbook.io/experiment/..."$'\n'
+                  echo "❌ No Linear bot comment found. Please ensure the PR is properly linked to a Linear issue."
+                  VALIDATION_RESULT+="❌ **Linear Ticket:** Not linked"$'\n'
                   VALIDATION_STATUS="failure"
-                  MISSING_GROWTHBOOK_LINK="true"
               fi
           fi
 
@@ -195,9 +166,6 @@ jobs:
                   fi
                   if [[ -z "$LINEAR_BOT_COMMENT" ]]; then
                       VALIDATION_RESULT+="- Please link this PR to a Linear issue"$'\n'
-                  fi
-                  if [[ "$MISSING_GROWTHBOOK_LINK" == "true" ]]; then
-                      VALIDATION_RESULT+="- Add a GrowthBook feature flag or experiment link, or comment \"no experiment\" if exempt"$'\n'
                   fi
               fi
           else
