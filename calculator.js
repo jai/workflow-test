@@ -93,6 +93,26 @@ class Calculator {
         return result;
     }
 
+    /**
+     * Calculate the cube of a number
+     * @param {number} n - The number to cube
+     * @returns {number} The cube of the number
+     * @example cube(3) returns 27
+     */
+    cube(n) {
+        // Handle edge cases
+        if (typeof n !== 'number') {
+            throw new TypeError('Argument must be a number');
+        }
+        if (!isFinite(n)) {
+            throw new Error('Argument must be a finite number');
+        }
+        
+        const result = n * n * n;
+        this.history.push(`${n}³ = ${result}`);
+        return result;
+    }
+
     getHistory() {
         return this.history;
     }
@@ -111,6 +131,7 @@ console.log(calc.multiply(4, 7));
 console.log(calc.percentage(200, 10));  // 20
 console.log(calc.percentOf(20, 200));   // 10
 console.log(calc.square(5));            // 25
+console.log(calc.cube(3));              // 27
 console.log('History:', calc.getHistory());
 
 module.exports = Calculator;

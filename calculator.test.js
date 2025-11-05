@@ -238,6 +238,56 @@ describe('Calculator', () => {
         });
     });
 
+    describe('cube', () => {
+        test('should calculate cube of positive number', () => {
+            expect(calc.cube(3)).toBe(27);
+        });
+
+        test('should calculate cube of zero', () => {
+            expect(calc.cube(0)).toBe(0);
+        });
+
+        test('should calculate cube of negative number', () => {
+            expect(calc.cube(-2)).toBe(-8);
+        });
+
+        test('should handle decimal numbers', () => {
+            expect(calc.cube(2.5)).toBe(15.625);
+        });
+
+        test('should handle very small numbers', () => {
+            expect(calc.cube(0.1)).toBeCloseTo(0.001);
+        });
+
+        test('should handle large numbers', () => {
+            expect(calc.cube(10)).toBe(1000);
+        });
+
+        test('should throw TypeError for non-number arguments', () => {
+            expect(() => calc.cube('3')).toThrow(TypeError);
+            expect(() => calc.cube(null)).toThrow(TypeError);
+            expect(() => calc.cube(undefined)).toThrow(TypeError);
+            expect(() => calc.cube({})).toThrow(TypeError);
+            expect(() => calc.cube([])).toThrow(TypeError);
+        });
+
+        test('should throw Error for infinite values', () => {
+            expect(() => calc.cube(Infinity)).toThrow('Argument must be a finite number');
+            expect(() => calc.cube(-Infinity)).toThrow('Argument must be a finite number');
+            expect(() => calc.cube(NaN)).toThrow('Argument must be a finite number');
+        });
+
+        test('should save to history with proper format', () => {
+            calc.cube(3);
+            expect(calc.getHistory()).toContain('3³ = 27');
+        });
+
+        test('should save negative number cubes to history', () => {
+            calc.cube(-3);
+            expect(calc.getHistory()).toContain('-3³ = -27');
+        });
+    });
+
     describe('history management', () => {
         test('should maintain history across multiple operations', () => {
             calc.add(5, 3);
@@ -246,15 +296,17 @@ describe('Calculator', () => {
             calc.percentage(200, 10);
             calc.percentOf(20, 200);
             calc.square(5);
+            calc.cube(3);
             
             const history = calc.getHistory();
-            expect(history).toHaveLength(6);
+            expect(history).toHaveLength(7);
             expect(history[0]).toBe('5 + 3 = 8');
             expect(history[1]).toBe('10 - 4 = 6');
             expect(history[2]).toBe('10 / 2 = 5');
             expect(history[3]).toBe('10% of 200 = 20');
             expect(history[4]).toBe('20 is 10% of 200');
             expect(history[5]).toBe('5² = 25');
+            expect(history[6]).toBe('3³ = 27');
         });
 
         test('should clear history', () => {
