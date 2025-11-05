@@ -93,6 +93,50 @@ class Calculator {
         return result;
     }
 
+    /**
+     * Calculate the nth root of a number
+     * @param {number} value - The value to find the root of
+     * @param {number} n - The degree of the root (default: 2 for square root)
+     * @returns {number} The nth root of the value
+     * @example root(27, 3) returns 3 (cube root of 27)
+     * @example root(16) returns 4 (square root of 16)
+     */
+    root(value, n = 2) {
+        // Handle edge cases
+        if (typeof value !== 'number' || typeof n !== 'number') {
+            throw new TypeError('Both arguments must be numbers');
+        }
+        if (!isFinite(value) || !isFinite(n)) {
+            throw new Error('Arguments must be finite numbers');
+        }
+        if (n === 0) {
+            throw new Error('Root degree cannot be zero');
+        }
+        if (value < 0 && n % 2 === 0) {
+            throw new Error('Cannot calculate even root of negative number');
+        }
+        
+        // Calculate nth root using Math.pow with fractional exponent
+        // For negative values with odd n, handle sign separately
+        let result;
+        if (value < 0 && n % 2 !== 0) {
+            result = -Math.pow(Math.abs(value), 1 / n);
+        } else {
+            result = Math.pow(value, 1 / n);
+        }
+        
+        // Format history message based on root degree
+        if (n === 2) {
+            this.history.push(`√${value} = ${result}`);
+        } else if (n === 3) {
+            this.history.push(`∛${value} = ${result}`);
+        } else {
+            this.history.push(`${n}√${value} = ${result}`);
+        }
+        
+        return result;
+    }
+
     getHistory() {
         return this.history;
     }
@@ -111,6 +155,8 @@ console.log(calc.multiply(4, 7));
 console.log(calc.percentage(200, 10));  // 20
 console.log(calc.percentOf(20, 200));   // 10
 console.log(calc.square(5));            // 25
+console.log(calc.root(16));             // 4 (square root)
+console.log(calc.root(27, 3));          // 3 (cube root)
 console.log('History:', calc.getHistory());
 
 module.exports = Calculator;
