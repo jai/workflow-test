@@ -269,15 +269,14 @@ def build_records(
         items = load_activity_items(client, disk_cache, incident_id, modified_time, debug=debug)
         update = extract_latest_human_update(items)
 
-        update_present = update is not None
-        update_timestamp_iso = update["timestamp"].astimezone(timezone.utc).isoformat() if update_present else None
-        update_age_hours = (
-            round((now - update["timestamp"]).total_seconds() / 3600, 2)
-            if update_present
-            else None
-        )
-        within_window = update_present and update["timestamp"] >= window_start
-        update_text = update["text"] if update_present else ""
+        if not update:
+            # Skip incidents without human-authored textual updates within look-back window
+            continue
+
+        update_timestamp_iso = update["timestamp"].astimezone(timezone.utc).isoformat()
+        update_age_hours = round((now - update["timestamp"]).total_seconds() / 3600, 2)
+        within_window = update["timestamp"] >= window_start
+        update_text = update["text"]
         update_text_prompt, truncated = truncate_text(update_text)
 
         record = {
@@ -285,13 +284,13 @@ def build_records(
             "window_hours": window_hours,
             "window_start": window_start.astimezone(timezone.utc).isoformat(),
             "status_update": {
-                "missing": not update_present,
+                "missing": False,
                 "within_window": within_window,
                 "timestamp": update_timestamp_iso,
                 "age_hours": update_age_hours,
-                "author": update["author"] if update_present else None,
-                "author_display": format_author(update["author"]) if update_present else None,
-                "activity_kind": update["activity_kind"] if update_present else None,
+                "author": update["author"],
+                "author_display": format_author(update["author"]),
+                "activity_kind": update["activity_kind"],
                 "text": update_text,
                 "text_prompt": update_text_prompt,
                 "text_truncated": truncated,
