@@ -81,7 +81,7 @@ def build_failure_section(inc, decision):
     notes = decision.get("notes") or []
     reason = html.escape(" ".join(notes)) if notes else "No additional commentary."
 
-    status_block = f"<i>{preview_html}</i><br>{html.escape(author)} — {rel_time}"
+    status_block = f"<i>{preview_html} — <b>{html.escape(author)}</b></i><br>{rel_time}"
     analysis_block = "<b>Analysis:</b><br>" + \
         f"Status update contains: {summary_flag} summary | {next_flag} next steps<br>" + \
         reason
