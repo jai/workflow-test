@@ -241,7 +241,9 @@ jobs:
           def fmt_text(value: str) -> str:
               if not value:
                   return "_No status text provided_"
-              return html.escape(value).replace("\n", "<br>")
+              collapsed = " ".join(value.split())
+              escaped = html.escape(collapsed)
+              return escaped
 
           data = json.loads(Path(os.environ["INCIDENT_DATA_PATH"]).read_text())
           decisions = json.loads(Path(os.environ["DECISIONS_PATH"]).read_text())
@@ -262,35 +264,29 @@ jobs:
               status = inc.get("status_update") or {}
               summary_flag = "✅" if decision.get("summaryAdequate") else "❌"
               next_flag = "✅" if decision.get("nextStepsAdequate") else "❌"
-              author = status.get("author_display") or "Unknown responder"
+              author = status.get("author_display") or "Responder"
               ts = status.get("timestamp") or "unknown time"
               url = inc.get("overview_url")
               title = html.escape(inc.get('title', inc['incident_id']))
               severity = html.escape(inc.get('severity', 'unknown'))
               header = [
                   f"<b>{title}</b> (Severity: {severity})",
-                  f"{summary_flag} Summary | {next_flag} Next steps",
+                  f"{summary_flag} summary | {next_flag} next steps — {html.escape(author)} @ {html.escape(ts)}",
               ]
-              if url:
-                  header.append(f"<a href=\"{url}\">View status update</a>")
 
-              ts_text = html.escape(ts)
-              author_text = html.escape(author)
               preview_source = status.get('text') or ''
-              first_line = preview_source.strip().splitlines()[0] if preview_source else ""
-              preview = first_line[:160] + ("…" if len(first_line) > 160 else "")
+              collapsed_preview = " ".join(preview_source.split())
+              preview = collapsed_preview[:200] + ("…" if len(collapsed_preview) > 200 else "")
               preview_html = fmt_text(preview) if preview else "_No preview available_"
-              status_block = (
-                  f"<i>Latest update ({ts_text}) by {author_text}:</i><br>"
-                  f"{preview_html}"
-              )
-              notes = decision.get("notes") or []
-              notes_block = ""
-              if notes:
-                  escaped_notes = "<br>• ".join(html.escape(n) for n in notes)
-                  notes_block = f"Notes:<br>• {escaped_notes}"
+              if url:
+                  preview_html = f"{preview_html} <a href=\"{url}\">↗</a>"
 
-              text = "<br>".join(part for part in [*header, status_block, notes_block] if part)
+              notes = decision.get("notes") or []
+              reason_text = ""
+              if notes:
+                  reason_text = f"<b>Reason:</b> {html.escape(' '.join(notes))}"
+
+              text = "<br>".join(part for part in [*header, preview_html, reason_text] if part)
               return {"widgets": [{"textParagraph": {"text": text}}]}
 
           summary_lines = [
