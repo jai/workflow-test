@@ -75,35 +75,12 @@ jobs:
 
       - name: Inspect dataset
         id: dataset
-        run: |
-          python <<'PY'
-          import json, os
-          path = os.environ["INCIDENT_DATA_PATH"]
-          data = json.load(open(path))
-          count = len(data.get("incidents", []))
-          print(f"Incidents collected: {count}")
-          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
-              fh.write(f"incident_count={count}\n")
-          PY
+        run: python scripts/tools/inspect_dataset.py
 
       - name: Prepare prompt payload
         id: prompt
         if: steps.dataset.outputs.incident_count != '0'
-        run: |
-          python <<'PY'
-          import os
-          from pathlib import Path
-
-          payload = Path(os.environ["INCIDENT_PROMPT_PATH"]).read_text()
-          gh_output = Path(os.environ["GITHUB_OUTPUT"])
-
-          with gh_output.open("a", encoding="utf-8") as fh:
-              fh.write("payload<<__PROMPT_JSON__\n")
-              fh.write(payload)
-              if not payload.endswith("\n"):
-                  fh.write("\n")
-              fh.write("__PROMPT_JSON__\n")
-          PY
+        run: python scripts/tools/prepare_prompt_payload.py
 
       - name: Evaluate status updates with Claude
         id: claude
@@ -166,111 +143,7 @@ jobs:
         if: steps.dataset.outputs.incident_count != '0'
         env:
           WEBHOOK_URL: ${{ secrets.GOOGLE_CHAT_INCIDENT_STATUS_QUALITY_WEBHOOK_URL }}
-        run: |
-          python <<'PY'
-          import html
-          import json
-          import os
-          from pathlib import Path
-
-          webhook = os.environ.get("WEBHOOK_URL")
-          if not webhook:
-              print("Google Chat webhook not configured; skipping notification.")
-              raise SystemExit(0)
-
-          import requests
-
-          def fmt_text(value: str) -> str:
-              if not value:
-                  return "_No status text provided_"
-              collapsed = " ".join(value.split())
-              escaped = html.escape(collapsed)
-              return escaped
-
-          data = json.loads(Path(os.environ["INCIDENT_DATA_PATH"]).read_text())
-          decisions = json.loads(Path(os.environ["DECISIONS_PATH"]).read_text())
-          incident_map = {item["incident_id"]: item for item in data.get("incidents", [])}
-
-          pass_count = sum(1 for d in decisions if d.get("overallStatus") == "pass")
-          window_hours = os.environ["WINDOW_HOURS"]
-
-          update_failures = []
-          for decision in decisions:
-              inc = incident_map.get(decision["incident_id"])
-              if not inc:
-                  continue
-              if decision.get("overallStatus") == "fail":
-                  update_failures.append((inc, decision))
-
-          def build_failure_section(inc, decision):
-              status = inc.get("status_update") or {}
-              summary_flag = "✅" if decision.get("summaryAdequate") else "❌"
-              next_flag = "✅" if decision.get("nextStepsAdequate") else "❌"
-              author = status.get("author_display") or "Responder"
-              ts = status.get("timestamp") or "unknown time"
-              url = inc.get("overview_url")
-              title = html.escape(inc.get('title', inc['incident_id']))
-              severity = html.escape(inc.get('severity', 'unknown'))
-              header = [f"<b>{title}</b> (Severity: {severity})"]
-              status_line = f"{summary_flag} summary | {next_flag} next steps"
-              identity_line = f"{html.escape(author)} — {html.escape(ts)}"
-              header.extend([status_line, identity_line, ""])
-
-              preview_source = status.get('text') or ''
-              collapsed_preview = " ".join(preview_source.split())
-              preview = collapsed_preview[:200] + ("…" if len(collapsed_preview) > 200 else "")
-              preview_html = fmt_text(preview) if preview else "_No preview available_"
-              if url:
-                  preview_html = f"{preview_html} <a href=\"{url}\">↗</a>"
-
-              notes = decision.get("notes") or []
-              reason_text = ""
-              if notes:
-                  reason_text = f"<b>Reason:</b> {html.escape(' '.join(notes))}"
-
-              text = "<br>".join(part for part in [*header, preview_html, reason_text, ""] if part)
-              return {"widgets": [{"textParagraph": {"text": text}}]}
-
-          summary_lines = [
-              f"Incidents evaluated: {len(decisions)}",
-              f"Passing updates: {pass_count}",
-              f"Action needed: {len(update_failures)}",
-          ]
-          main_sections = [
-              {"widgets": [{"textParagraph": {"text": "<br>".join(summary_lines)}}]}
-          ]
-          if update_failures:
-              for inc, decision in update_failures:
-                  main_sections.append(build_failure_section(inc, decision))
-          else:
-              main_sections.append(
-                  {
-                      "widgets": [
-                          {
-                              "textParagraph": {
-                                  "text": "✅ All incidents with status updates meet the requirements."
-                              }
-                          }
-                      ]
-                  }
-              )
-
-          payload = {
-              "cards": [
-                  {
-                      "header": {
-                          "title": f"Incident status quality check — last {window_hours}h",
-                          "subtitle": "Claude incident status audit",
-                      },
-                      "sections": main_sections,
-                  }
-              ]
-          }
-          resp = requests.post(webhook, json=payload, timeout=20)
-          if resp.status_code >= 300:
-              raise SystemExit(f"Chat webhook failed: {resp.status_code} {resp.text}")
-          print("Posted results to Google Chat.")
-          PY
+        run: python scripts/tools/send_incident_status_notification.py
 
       - name: Collect artifacts
         if: always()
