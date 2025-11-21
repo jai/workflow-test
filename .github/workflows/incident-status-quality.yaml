@@ -168,7 +168,7 @@ jobs:
           from pathlib import Path
 
           exec_file = Path(os.environ["EXECUTION_FILE"])
-          marker = re.compile(r"STATUS_DECISIONS::(\[.*\])")
+          marker = re.compile(r"STATUS_DECISIONS::(\[.*\])", re.DOTALL)
           turns = json.loads(exec_file.read_text())
 
           decisions = None
