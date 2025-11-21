@@ -121,8 +121,8 @@ jobs:
             2. Outlines clear next steps or owner follow-up actions.
 
             Context:
-            - Consider the look-back window (last ${{ env.WINDOW_HOURS }}h). If the latest human
-              update falls outside the window or is missing/empty, that incident should fail.
+            - Consider the look-back window (last ${{ env.WINDOW_HOURS }}h); timestamps are
+              included for context only.
             - Treat "status_update_missing": true as an automatic failure.
             - If the text is truncated, base your decision on the truncated excerpt and
               mention the limitation in notes when uncertain.
