@@ -250,15 +250,10 @@ jobs:
           pass_count = sum(1 for d in decisions if d.get("overallStatus") == "pass")
           window_hours = os.environ["WINDOW_HOURS"]
 
-          missing_updates = []
           update_failures = []
           for decision in decisions:
               inc = incident_map.get(decision["incident_id"])
               if not inc:
-                  continue
-              status_info = inc.get("status_update") or {}
-              if status_info.get("missing"):
-                  missing_updates.append(inc)
                   continue
               if decision.get("overallStatus") == "fail":
                   update_failures.append((inc, decision))
@@ -270,16 +265,24 @@ jobs:
               author = status.get("author_display") or "Unknown responder"
               ts = status.get("timestamp") or "unknown time"
               url = inc.get("overview_url")
+              title = html.escape(inc.get('title', inc['incident_id']))
+              severity = html.escape(inc.get('severity', 'unknown'))
               header = [
-                  f"<b>{html.escape(inc.get('title', inc['incident_id']))}</b> (Severity: {html.escape(inc.get('severity', 'unknown'))})",
+                  f"<b>{title}</b> (Severity: {severity})",
                   f"{summary_flag} Summary | {next_flag} Next steps",
               ]
               if url:
-                  header.append(f"<a href=\"{url}\">Open incident</a>")
+                  header.append(f"<a href=\"{url}\">View status update</a>")
 
+              ts_text = html.escape(ts)
+              author_text = html.escape(author)
+              preview_source = status.get('text') or ''
+              first_line = preview_source.strip().splitlines()[0] if preview_source else ""
+              preview = first_line[:160] + ("…" if len(first_line) > 160 else "")
+              preview_html = fmt_text(preview) if preview else "_No preview available_"
               status_block = (
-                  f"<i>Latest update ({html.escape(ts)}) by {html.escape(author)}:</i><br>"
-                  f"{fmt_text(status.get('text'))}"
+                  f"<i>Latest update ({ts_text}) by {author_text}:</i><br>"
+                  f"{preview_html}"
               )
               notes = decision.get("notes") or []
               notes_block = ""
@@ -289,33 +292,6 @@ jobs:
 
               text = "<br>".join(part for part in [*header, status_block, notes_block] if part)
               return {"widgets": [{"textParagraph": {"text": text}}]}
-
-          def build_missing_card():
-              header = {
-                  "title": f"Missing incident updates — last {window_hours}h",
-                  "subtitle": "Claude incident status audit",
-              }
-              lines = []
-              for inc in missing_updates:
-                  url = inc.get("overview_url")
-                  title = html.escape(inc.get("title", inc["incident_id"]))
-                  severity = html.escape(inc.get("severity", "unknown"))
-                  line = f"• {title} (Severity: {severity})"
-                  if url:
-                      line = f"{line} — <a href=\"{url}\">Open</a>"
-                  lines.append(line)
-              body = "<br>".join(lines) if lines else "All incidents have recent updates."
-              return {
-                  "header": header,
-                  "sections": [
-                      {
-                          "widgets": [
-                              {"textParagraph": {"text": f"{len(missing_updates)} incidents missing updates."}}
-                          ]
-                      },
-                      {"widgets": [{"textParagraph": {"text": body}}]},
-                  ],
-              }
 
           summary_lines = [
               f"Incidents evaluated: {len(decisions)}",
@@ -330,22 +306,28 @@ jobs:
                   main_sections.append(build_failure_section(inc, decision))
           else:
               main_sections.append(
-                  {"widgets": [{"textParagraph": {"text": "✅ All incidents with status updates meet the requirements."}}]}
+                  {
+                      "widgets": [
+                          {
+                              "textParagraph": {
+                                  "text": "✅ All incidents with status updates meet the requirements."
+                              }
+                          }
+                      ]
+                  }
               )
 
-          cards = [
-              {
-                  "header": {
-                      "title": f"Incident status quality check — last {window_hours}h",
-                      "subtitle": "Claude incident status audit",
-                  },
-                  "sections": main_sections,
-              }
-          ]
-          if missing_updates:
-              cards.append(build_missing_card())
-
-          payload = {"cards": cards}
+          payload = {
+              "cards": [
+                  {
+                      "header": {
+                          "title": f"Incident status quality check — last {window_hours}h",
+                          "subtitle": "Claude incident status audit",
+                      },
+                      "sections": main_sections,
+                  }
+              ]
+          }
           resp = requests.post(webhook, json=payload, timeout=20)
           if resp.status_code >= 300:
               raise SystemExit(f"Chat webhook failed: {resp.status_code} {resp.text}")
