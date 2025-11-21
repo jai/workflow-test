@@ -269,10 +269,10 @@ jobs:
               url = inc.get("overview_url")
               title = html.escape(inc.get('title', inc['incident_id']))
               severity = html.escape(inc.get('severity', 'unknown'))
-              header = [
-                  f"<b>{title}</b> (Severity: {severity})",
-                  f"{summary_flag} summary | {next_flag} next steps — {html.escape(author)} @ {html.escape(ts)}",
-              ]
+              header = [f"<b>{title}</b> (Severity: {severity})"]
+              status_line = f"{summary_flag} summary | {next_flag} next steps"
+              identity_line = f"{html.escape(author)} — {html.escape(ts)}"
+              header.extend([status_line, identity_line, ""])
 
               preview_source = status.get('text') or ''
               collapsed_preview = " ".join(preview_source.split())
@@ -286,7 +286,7 @@ jobs:
               if notes:
                   reason_text = f"<b>Reason:</b> {html.escape(' '.join(notes))}"
 
-              text = "<br>".join(part for part in [*header, preview_html, reason_text] if part)
+              text = "<br>".join(part for part in [*header, preview_html, reason_text, ""] if part)
               return {"widgets": [{"textParagraph": {"text": text}}]}
 
           summary_lines = [
