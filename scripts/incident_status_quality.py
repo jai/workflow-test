@@ -122,12 +122,7 @@ def truncate_text(text: str, limit: int = MAX_STATUS_CHARS) -> Tuple[str, bool]:
 
 def is_textual_update(kind: Optional[str], text: str) -> bool:
     kind_normalized = (kind or "").lower()
-    if kind_normalized in TEXTUAL_ACTIVITY_KINDS:
-        return True
-    # Fallback: require meaningful free-text content
-    if not text:
-        return False
-    if text.startswith("[") and "] became" in text:
+    if kind_normalized not in TEXTUAL_ACTIVITY_KINDS:
         return False
     return bool(text.strip())
 
