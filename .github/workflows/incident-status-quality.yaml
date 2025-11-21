@@ -88,7 +88,7 @@ jobs:
 
       - name: Prepare prompt payload
         id: prompt
-        if: steps.dataset.outputs.incident_count != "0"
+        if: steps.dataset.outputs.incident_count != '0'
         run: |
           {
             echo "payload<<EOF"
@@ -98,7 +98,7 @@ jobs:
 
       - name: Evaluate status updates with Claude
         id: claude
-        if: steps.dataset.outputs.incident_count != "0"
+        if: steps.dataset.outputs.incident_count != '0'
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
