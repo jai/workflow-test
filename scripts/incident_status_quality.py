@@ -26,6 +26,14 @@ from incident_reporter import (
     parse_timestamp,
 )
 
+TEXTUAL_ACTIVITY_KINDS = {
+    "keyupdateadded",
+    "incidentupdatecreated",
+    "statusupdateadded",
+    "messageadded",
+    "timelinecommentadded",
+}
+
 DEFAULT_OUTPUT_JSON = "incident-status-data.json"
 DEFAULT_PROMPT_JSON = "incident-status-prompt.json"
 MAX_STATUS_CHARS = 1800
@@ -112,6 +120,18 @@ def truncate_text(text: str, limit: int = MAX_STATUS_CHARS) -> Tuple[str, bool]:
     return f"{truncated} {suffix}", True
 
 
+def is_textual_update(kind: Optional[str], text: str) -> bool:
+    kind_normalized = (kind or "").lower()
+    if kind_normalized in TEXTUAL_ACTIVITY_KINDS:
+        return True
+    # Fallback: require meaningful free-text content
+    if not text:
+        return False
+    if text.startswith("[") and "] became" in text:
+        return False
+    return bool(text.strip())
+
+
 def load_activity_items(
     client: GrafanaIRMClient,
     disk_cache: DiskCache,
@@ -161,12 +181,15 @@ def extract_latest_human_update(
         if not parsed_time:
             continue
 
+        kind = item.get("activityKind") or item.get("eventType")
         content = (item.get("body") or item.get("text") or "").strip()
+        if not is_textual_update(kind, content):
+            continue
         return {
             "timestamp_raw": raw_time,
             "timestamp": parsed_time,
             "text": content,
-            "activity_kind": item.get("activityKind") or item.get("eventType"),
+            "activity_kind": kind,
             "author": {
                 "name": user.get("name"),
                 "email": user.get("email"),
