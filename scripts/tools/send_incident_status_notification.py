@@ -2,6 +2,7 @@
 import html
 import json
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 
 import requests
@@ -22,6 +23,32 @@ def fmt_text(value: str) -> str:
     collapsed = " ".join(value.split())
     return html.escape(collapsed)
 
+
+def relative_time(iso_ts: str) -> str:
+    if not iso_ts:
+        return "unknown time"
+    safe_ts = iso_ts.replace("Z", "+00:00")
+    try:
+        dt = datetime.fromisoformat(safe_ts)
+    except ValueError:
+        return html.escape(iso_ts)
+    now = datetime.now(timezone.utc)
+    delta = now - dt
+    seconds = int(delta.total_seconds())
+    if seconds < 60:
+        return "just now"
+    minutes = seconds // 60
+    if minutes < 60:
+        return f"{minutes}m ago"
+    hours = minutes // 60
+    if hours < 24:
+        return f"{hours}h ago"
+    days = hours // 24
+    if days < 7:
+        return f"{days}d ago"
+    weeks = days // 7
+    return f"{weeks}w ago"
+
 pass_count = sum(1 for d in decisions if d.get("overallStatus") == "pass")
 failures = []
 for decision in decisions:
@@ -36,17 +63,13 @@ def build_failure_section(inc, decision):
     summary_flag = "✅" if decision.get("summaryAdequate") else "❌"
     next_flag = "✅" if decision.get("nextStepsAdequate") else "❌"
     author = status.get("author_display") or "Responder"
-    ts = status.get("timestamp") or "unknown time"
+    ts = status.get("timestamp") or ""
     url = inc.get("overview_url")
     title = html.escape(inc.get('title', inc['incident_id']))
     severity = html.escape(inc.get('severity', 'unknown'))
 
-    header_lines = [
-        f"<b>{title}</b> (Severity: {severity})",
-        f"{summary_flag} summary | {next_flag} next steps",
-        f"{html.escape(author)} — {html.escape(ts)}",
-        "",
-    ]
+    header_line = f"<b>{title}</b> (Severity: {severity})"
+    rel_time = relative_time(ts)
 
     preview_source = status.get('text') or ''
     collapsed_preview = " ".join(preview_source.split())
@@ -56,9 +79,20 @@ def build_failure_section(inc, decision):
         preview_html = f"{preview_html} <a href=\"{url}\">↗</a>"
 
     notes = decision.get("notes") or []
-    reason_text = f"<b>Analysis:</b> {html.escape(' '.join(notes))}" if notes else ""
+    reason = html.escape(" ".join(notes)) if notes else ""
 
-    text = "<br>".join(part for part in [*header_lines, f"<i>{preview_html}</i>", reason_text, ""] if part)
+    lines = [
+        header_line,
+        "",
+        f"<i>{preview_html}</i>",
+        f"{html.escape(author)} — {rel_time}",
+        "",
+        "<b>Analysis:</b>",
+        f"Status update contains: {summary_flag} summary | {next_flag} next steps",
+        reason,
+        "",
+    ]
+    text = "<br>".join(part for part in lines if part)
     return {"widgets": [{"textParagraph": {"text": text}}]}
 
 summary_lines = [
