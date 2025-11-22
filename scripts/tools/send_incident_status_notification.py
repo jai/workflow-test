@@ -125,9 +125,9 @@ def build_failure_section(inc, decision, idx):
     return {"widgets": [{"textParagraph": {"text": text}}]}
 
 
-def build_pass_section(pass_items):
-    lines = []
-    for inc, _ in pass_items:
+def build_pass_sections(pass_items):
+    sections = []
+    for inc, decision in pass_items:
         status = inc.get("status_update") or {}
         author = status.get("author_display") or "Responder"
         ts = status.get("timestamp") or inc.get("modified_time") or ""
@@ -143,12 +143,17 @@ def build_pass_section(pass_items):
             status_line += f" <a href=\"{url}\">↗</a>"
         actor_line = f"👤 {html.escape(author)} • {rel_time}"
 
-        block = "<br>".join([f"{sev_icon} <b>{title}</b>", "", status_line, actor_line])
-        lines.append(block)
+        summary_flag = "✅" if decision.get("summaryAdequate") else "❌"
+        next_flag = "✅" if decision.get("nextStepsAdequate") else "❌"
+        analysis_line = f"🧪 Analysis: {summary_flag} summary | {next_flag} next steps"
+        notes = decision.get("notes") or []
+        reason = html.escape(" ".join(notes)) if notes else "No additional commentary."
+        notes_line = f"📝 Notes: {reason}"
 
-    if not lines:
-        return None
-    return {"widgets": [{"textParagraph": {"text": "<br><br>".join(lines)}}]}
+        text = "<br>".join([f"{sev_icon} <b>{title}</b>", "", status_line, actor_line, "", analysis_line, notes_line])
+        sections.append({"widgets": [{"textParagraph": {"text": text}}]})
+
+    return sections
 
 summary_lines = [
     f"📊 <b>Incidents evaluated:</b> {len(decisions)}",
@@ -156,6 +161,7 @@ summary_lines = [
     f"🚧 <b>Needs attention:</b> {len(failures)}",
 ]
 main_sections = [{"widgets": [{"textParagraph": {"text": "<br>".join(summary_lines)}}]}]
+main_sections.append({"widgets": [{"textParagraph": {"text": " "}}]})
 if failures:
     for idx, (inc, decision) in enumerate(failures, start=1):
         main_sections.append(build_failure_section(inc, decision, idx))
@@ -163,10 +169,10 @@ else:
     main_sections.append({"widgets": [{"textParagraph": {"text": "✅ All incidents with status updates meet the requirements."}}]})
 
 if include_passing:
-    pass_section = build_pass_section(passes)
-    if pass_section:
-        pass_section["header"] = "Passing incidents"
-        main_sections.append(pass_section)
+    pass_sections = build_pass_sections(passes)
+    if pass_sections:
+        pass_sections[0]["header"] = "Passing incidents"
+        main_sections.extend(pass_sections)
     else:
         main_sections.append({"widgets": [{"textParagraph": {"text": "ℹ️ Passing incidents requested, but none to display."}}]})
 
