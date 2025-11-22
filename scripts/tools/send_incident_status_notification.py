@@ -16,10 +16,11 @@ window_hours = os.environ["WINDOW_HOURS"]
 data = json.loads(Path(os.environ["INCIDENT_DATA_PATH"]).read_text())
 decisions = json.loads(Path(os.environ["DECISIONS_PATH"]).read_text())
 incident_map = {item["incident_id"]: item for item in data.get("incidents", [])}
+SEVERITY_ICONS = {"Critical": "🔴", "Major": "🟠", "Minor": "🟡"}
 
 def fmt_text(value: str) -> str:
     if not value:
-        return "_No status text provided_"
+        return "No status text provided"
     collapsed = " ".join(value.split())
     return html.escape(collapsed)
 
@@ -58,46 +59,58 @@ for decision in decisions:
     if decision.get("overallStatus") == "fail":
         failures.append((inc, decision))
 
-def build_failure_section(inc, decision):
+def build_preview(status):
+    preview_source = status.get("text") or ""
+    collapsed_preview = " ".join(preview_source.split())
+    max_len = 160
+    preview = collapsed_preview[:max_len] + ("…" if len(collapsed_preview) > max_len else "")
+    return preview if preview else ""
+
+
+def build_failure_section(inc, decision, idx):
     status = inc.get("status_update") or {}
     summary_flag = "✅" if decision.get("summaryAdequate") else "❌"
     next_flag = "✅" if decision.get("nextStepsAdequate") else "❌"
     author = status.get("author_display") or "Responder"
     ts = status.get("timestamp") or ""
     url = inc.get("overview_url")
-    title = html.escape(inc.get('title', inc['incident_id']))
-    severity = html.escape(inc.get('severity', 'unknown'))
+    title = html.escape(inc.get("title", inc["incident_id"]))
+    severity = html.escape(inc.get("severity", "unknown"))
+    sev_icon = SEVERITY_ICONS.get(inc.get("severity"), "⚪️")
 
-    header_line = f"<b>{title}</b> (Severity: {severity})"
+    header_line = f"{idx}) {sev_icon} <b>{title}</b> — {severity}"
     rel_time = relative_time(ts)
 
-    preview_source = status.get('text') or ''
-    collapsed_preview = " ".join(preview_source.split())
-    preview = collapsed_preview[:200] + ("…" if len(collapsed_preview) > 200 else "")
+    preview = build_preview(status)
     preview_html = fmt_text(preview) if preview else "_No preview available_"
+    status_line = f"🧭 Status: <i>{preview_html}</i>"
+    if status.get("missing"):
+        status_line += " — <i>no recent human update</i>"
+    elif not status.get("within_window", True):
+        status_line += " — <i>last update outside window</i>"
     if url:
-        preview_html = f"{preview_html} <a href=\"{url}\">↗</a>"
+        status_line += f" <a href=\"{url}\">↗</a>"
 
+    actor_line = f"👤 {html.escape(author)} • {rel_time}"
     notes = decision.get("notes") or []
     reason = html.escape(" ".join(notes)) if notes else "No additional commentary."
 
-    status_block = f"<i>{preview_html} — <b>{html.escape(author)}</b></i><br>{rel_time}"
-    analysis_block = "<b>Analysis:</b><br>" + \
-        f"Status update contains: {summary_flag} summary | {next_flag} next steps<br>" + \
-        reason
+    analysis_line = f"🧪 Analysis: {summary_flag} summary | {next_flag} next steps"
+    notes_line = f"📝 Notes: {reason}"
 
-    text = "<br><br>".join([header_line, status_block, analysis_block])
+    text = "<br>".join([header_line, actor_line, status_line, analysis_line, notes_line])
     return {"widgets": [{"textParagraph": {"text": text}}]}
 
 summary_lines = [
-    f"Incidents evaluated: {len(decisions)}",
-    f"Passing updates: {pass_count}",
-    f"Action needed: {len(failures)}",
+    f"📊 <b>Incidents evaluated:</b> {len(decisions)}",
+    f"✅ <b>Passing:</b> {pass_count}",
+    f"🚧 <b>Needs attention:</b> {len(failures)}",
+    f"⏱️ Window: last {window_hours}h",
 ]
 main_sections = [{"widgets": [{"textParagraph": {"text": "<br>".join(summary_lines)}}]}]
 if failures:
-    for inc, decision in failures:
-        main_sections.append(build_failure_section(inc, decision))
+    for idx, (inc, decision) in enumerate(failures, start=1):
+        main_sections.append(build_failure_section(inc, decision, idx))
 else:
     main_sections.append({"widgets": [{"textParagraph": {"text": "✅ All incidents with status updates meet the requirements."}}]})
 

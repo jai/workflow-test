@@ -17,6 +17,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+import re
+
 from incident_reporter import (
     DiskCache,
     GrafanaIRMClient,
@@ -127,6 +129,31 @@ def is_textual_update(kind: Optional[str], text: str) -> bool:
     return bool(text.strip())
 
 
+ANSI_ESCAPE = re.compile(r"\x1B\[[0-9;]*[A-Za-z]")
+
+
+def clean_status_text(text: str) -> str:
+    if not text:
+        return ""
+
+    without_ansi = ANSI_ESCAPE.sub("", text)
+    cleaned = without_ansi.strip()
+    lower_clean = cleaned.lower()
+    if lower_clean.startswith("status update added by"):
+        marker_idx = cleaned.find("\n")
+        if marker_idx != -1:
+            cleaned = cleaned[marker_idx + 1 :]
+        else:
+            cleaned = ""
+
+    if "<<<" in cleaned or ">>>" in cleaned:
+        cleaned = cleaned.split(">>>", 1)[-1]
+
+    cleaned = cleaned.strip().strip("*_")
+    cleaned = re.sub(r"\s+", " ", cleaned)
+    return cleaned
+
+
 def load_activity_items(
     client: GrafanaIRMClient,
     disk_cache: DiskCache,
@@ -199,11 +226,10 @@ def format_author(author: Dict[str, Any]) -> str:
     name = author.get("name")
     username = author.get("username")
     email = author.get("email")
-    if name and username:
-        return f"{name} ({username})"
-    if name and email:
-        return f"{name} ({email})"
-    return name or username or email or "Unknown responder"
+    if name:
+        first = name.strip().split()[0]
+        return first
+    return username or email or "Responder"
 
 
 def incident_metadata(
@@ -269,32 +295,45 @@ def build_records(
         items = load_activity_items(client, disk_cache, incident_id, modified_time, debug=debug)
         update = extract_latest_human_update(items)
 
-        if not update:
-            # Skip incidents without human-authored textual updates within look-back window
-            continue
+        clean_text = clean_status_text(update["text"]) if update else ""
+        status_update = {
+            "missing": False,
+            "within_window": False,
+            "timestamp": None,
+            "age_hours": None,
+            "author": None,
+            "author_display": None,
+            "activity_kind": None,
+            "text": "",
+            "text_prompt": "",
+            "text_truncated": False,
+        }
 
-        update_timestamp_iso = update["timestamp"].astimezone(timezone.utc).isoformat()
-        update_age_hours = round((now - update["timestamp"]).total_seconds() / 3600, 2)
-        within_window = update["timestamp"] >= window_start
-        update_text = update["text"]
-        update_text_prompt, truncated = truncate_text(update_text)
+        if not update or not clean_text:
+            status_update["missing"] = True
+        else:
+            update_timestamp_iso = update["timestamp"].astimezone(timezone.utc).isoformat()
+            update_age_hours = round((now - update["timestamp"]).total_seconds() / 3600, 2)
+            update_text_prompt, truncated = truncate_text(clean_text)
 
-        record = {
-            **metadata,
-            "window_hours": window_hours,
-            "window_start": window_start.astimezone(timezone.utc).isoformat(),
-            "status_update": {
+            status_update = {
                 "missing": False,
-                "within_window": within_window,
+                "within_window": update["timestamp"] >= window_start,
                 "timestamp": update_timestamp_iso,
                 "age_hours": update_age_hours,
                 "author": update["author"],
                 "author_display": format_author(update["author"]),
                 "activity_kind": update["activity_kind"],
-                "text": update_text,
+                "text": clean_text,
                 "text_prompt": update_text_prompt,
                 "text_truncated": truncated,
-            },
+            }
+
+        record = {
+            **metadata,
+            "window_hours": window_hours,
+            "window_start": window_start.astimezone(timezone.utc).isoformat(),
+            "status_update": status_update,
         }
         records.append(record)
 
