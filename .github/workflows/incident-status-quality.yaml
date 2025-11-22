@@ -26,6 +26,7 @@ jobs:
     env:
       WINDOW_HOURS: ${{ vars.INCIDENT_STATUS_WINDOW_HOURS || '24' }}
       MAX_INCIDENTS: ${{ vars.INCIDENT_STATUS_MAX_INCIDENTS || '' }}
+      INCLUDE_PASSING: ${{ vars.INCIDENT_STATUS_INCLUDE_PASSING || 'true' }}
       INCIDENT_DATA_PATH: incident-status-data.json
       INCIDENT_PROMPT_PATH: incident-status-prompt.json
       DECISIONS_PATH: incident-status-decisions.json

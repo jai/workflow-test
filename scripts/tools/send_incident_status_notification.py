@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import argparse
 import html
 import json
 import os
@@ -7,12 +8,33 @@ from pathlib import Path
 
 import requests
 
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Send incident status quality Chat card")
+    parser.add_argument(
+        "--include-passing",
+        action="store_true",
+        help="Include passing incidents in the Chat card (also set INCLUDE_PASSING env)",
+    )
+    return parser.parse_args()
+
+
+def env_flag(name: str) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return False
+    normalized = value.strip().lower()
+    return normalized in {"1", "true", "yes", "on", "y"}
+
+
+args = parse_args()
 webhook = os.environ.get("WEBHOOK_URL")
 if not webhook:
     print("Google Chat webhook not configured; skipping notification.")
     raise SystemExit(0)
 
-window_hours = os.environ["WINDOW_HOURS"]
+include_passing = args.include_passing or env_flag("INCLUDE_PASSING")
+
 data = json.loads(Path(os.environ["INCIDENT_DATA_PATH"]).read_text())
 decisions = json.loads(Path(os.environ["DECISIONS_PATH"]).read_text())
 incident_map = {item["incident_id"]: item for item in data.get("incidents", [])}
@@ -52,12 +74,15 @@ def relative_time(iso_ts: str) -> str:
 
 pass_count = sum(1 for d in decisions if d.get("overallStatus") == "pass")
 failures = []
+passes = []
 for decision in decisions:
     inc = incident_map.get(decision["incident_id"])
     if not inc:
         continue
     if decision.get("overallStatus") == "fail":
         failures.append((inc, decision))
+    elif include_passing:
+        passes.append((inc, decision))
 
 def build_preview(status):
     preview_source = status.get("text") or ""
@@ -86,8 +111,6 @@ def build_failure_section(inc, decision, idx):
     status_line = f"🧭 Status: <i>{preview_html}</i>"
     if status.get("missing"):
         status_line += " — <i>no recent human update</i>"
-    elif not status.get("within_window", True):
-        status_line += " — <i>last update outside window</i>"
     if url:
         status_line += f" <a href=\"{url}\">↗</a>"
 
@@ -101,11 +124,31 @@ def build_failure_section(inc, decision, idx):
     text = "<br>".join([header_line, actor_line, status_line, analysis_line, notes_line])
     return {"widgets": [{"textParagraph": {"text": text}}]}
 
+
+def build_pass_section(pass_items):
+    lines = []
+    for idx, (inc, _) in enumerate(pass_items, start=1):
+        status = inc.get("status_update") or {}
+        author = status.get("author_display") or "Responder"
+        ts = status.get("timestamp") or inc.get("modified_time") or ""
+        url = inc.get("overview_url")
+        title = html.escape(inc.get("title", inc["incident_id"]))
+        sev_icon = SEVERITY_ICONS.get(inc.get("severity"), "⚪️")
+        rel_time = relative_time(ts)
+
+        line = f"{idx}) {sev_icon} <b>{title}</b> — {html.escape(author)} • {rel_time}"
+        if url:
+            line += f" <a href=\"{url}\">↗</a>"
+        lines.append(line)
+
+    if not lines:
+        return None
+    return {"widgets": [{"textParagraph": {"text": "<br>".join(lines)}}]}
+
 summary_lines = [
     f"📊 <b>Incidents evaluated:</b> {len(decisions)}",
     f"✅ <b>Passing:</b> {pass_count}",
     f"🚧 <b>Needs attention:</b> {len(failures)}",
-    f"⏱️ Window: last {window_hours}h",
 ]
 main_sections = [{"widgets": [{"textParagraph": {"text": "<br>".join(summary_lines)}}]}]
 if failures:
@@ -114,11 +157,19 @@ if failures:
 else:
     main_sections.append({"widgets": [{"textParagraph": {"text": "✅ All incidents with status updates meet the requirements."}}]})
 
+if include_passing:
+    pass_section = build_pass_section(passes)
+    if pass_section:
+        pass_section["header"] = "Passing incidents"
+        main_sections.append(pass_section)
+    else:
+        main_sections.append({"widgets": [{"textParagraph": {"text": "ℹ️ Passing incidents requested, but none to display."}}]})
+
 payload = {
     "cards": [
         {
             "header": {
-                "title": f"Incident status quality check — last {window_hours}h",
+                "title": "Incident status quality check",
                 "subtitle": "Claude incident status audit",
             },
             "sections": main_sections,
