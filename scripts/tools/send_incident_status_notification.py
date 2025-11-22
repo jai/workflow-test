@@ -136,14 +136,19 @@ def build_pass_section(pass_items):
         sev_icon = SEVERITY_ICONS.get(inc.get("severity"), "⚪️")
         rel_time = relative_time(ts)
 
-        line = f"{sev_icon} <b>{title}</b> — {html.escape(author)} • {rel_time}"
+        preview = build_preview(status)
+        preview_html = fmt_text(preview) if preview else "_No preview available_"
+        status_line = f"🧭 Status: <i>{preview_html}</i>"
         if url:
-            line += f" <a href=\"{url}\">↗</a>"
-        lines.append(line)
+            status_line += f" <a href=\"{url}\">↗</a>"
+        actor_line = f"👤 {html.escape(author)} • {rel_time}"
+
+        block = "<br>".join([f"{sev_icon} <b>{title}</b>", "", status_line, actor_line])
+        lines.append(block)
 
     if not lines:
         return None
-    return {"widgets": [{"textParagraph": {"text": "<br>".join(lines)}}]}
+    return {"widgets": [{"textParagraph": {"text": "<br><br>".join(lines)}}]}
 
 summary_lines = [
     f"📊 <b>Incidents evaluated:</b> {len(decisions)}",
