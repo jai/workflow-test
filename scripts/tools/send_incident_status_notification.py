@@ -103,7 +103,7 @@ def build_failure_section(inc, decision, idx):
     severity = html.escape(inc.get("severity", "unknown"))
     sev_icon = SEVERITY_ICONS.get(inc.get("severity"), "⚪️")
 
-    header_line = f"{idx}) {sev_icon} <b>{title}</b> — {severity}"
+    header_line = f"{sev_icon} <b>{title}</b>"
     rel_time = relative_time(ts)
 
     preview = build_preview(status)
@@ -121,13 +121,13 @@ def build_failure_section(inc, decision, idx):
     analysis_line = f"🧪 Analysis: {summary_flag} summary | {next_flag} next steps"
     notes_line = f"📝 Notes: {reason}"
 
-    text = "<br>".join([header_line, "", actor_line, status_line, analysis_line, notes_line])
+    text = "<br>".join([header_line, "", status_line, actor_line, "", analysis_line, notes_line])
     return {"widgets": [{"textParagraph": {"text": text}}]}
 
 
 def build_pass_section(pass_items):
     lines = []
-    for idx, (inc, _) in enumerate(pass_items, start=1):
+    for inc, _ in pass_items:
         status = inc.get("status_update") or {}
         author = status.get("author_display") or "Responder"
         ts = status.get("timestamp") or inc.get("modified_time") or ""
@@ -136,7 +136,7 @@ def build_pass_section(pass_items):
         sev_icon = SEVERITY_ICONS.get(inc.get("severity"), "⚪️")
         rel_time = relative_time(ts)
 
-        line = f"{idx}) {sev_icon} <b>{title}</b> — {html.escape(author)} • {rel_time}"
+        line = f"{sev_icon} <b>{title}</b> — {html.escape(author)} • {rel_time}"
         if url:
             line += f" <a href=\"{url}\">↗</a>"
         lines.append(line)
