@@ -121,7 +121,7 @@ def build_failure_section(inc, decision, idx):
     analysis_line = f"🧪 Analysis: {summary_flag} summary | {next_flag} next steps"
     notes_line = f"📝 Notes: {reason}"
 
-    text = "<br>".join([header_line, actor_line, status_line, analysis_line, notes_line])
+    text = "<br>".join([header_line, "", actor_line, status_line, analysis_line, notes_line])
     return {"widgets": [{"textParagraph": {"text": text}}]}
 
 
