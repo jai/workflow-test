@@ -121,7 +121,7 @@ def build_failure_section(inc, decision, idx):
     notes = decision.get("notes") or []
     reason = html.escape(" ".join(notes)) if notes else "No additional commentary."
 
-    analysis_line = f"🧪 <b>Analysis:</b> {summary_flag} summary | {next_flag} next steps"
+    analysis_line = f"🧪 <b>Analysis:</b> summary {summary_flag} | next steps {next_flag}"
 
     text = "<br>".join([header_line, "", status_line, actor_line, "", analysis_line, reason])
     return {"widgets": [{"textParagraph": {"text": text}}]}
@@ -147,7 +147,7 @@ def build_pass_sections(pass_items):
 
         summary_flag = "✅" if decision.get("summaryAdequate") else "❌"
         next_flag = "✅" if decision.get("nextStepsAdequate") else "❌"
-        analysis_line = f"🧪 <b>Analysis:</b> {summary_flag} summary | {next_flag} next steps"
+        analysis_line = f"🧪 <b>Analysis:</b> summary {summary_flag} | next steps {next_flag}"
         notes = decision.get("notes") or []
         reason = html.escape(" ".join(notes)) if notes else "No additional commentary."
 
