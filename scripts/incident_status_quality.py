@@ -297,8 +297,6 @@ def build_records(
 
         if not update:
             continue
-        if update["timestamp"] < window_start:
-            continue
 
         clean_text = clean_status_text(update["text"])
         if not clean_text:
@@ -306,11 +304,12 @@ def build_records(
 
         update_timestamp_iso = update["timestamp"].astimezone(timezone.utc).isoformat()
         update_age_hours = round((now - update["timestamp"]).total_seconds() / 3600, 2)
+        within_window = update["timestamp"] >= window_start
         update_text_prompt, truncated = truncate_text(clean_text)
 
         status_update = {
             "missing": False,
-            "within_window": True,
+            "within_window": within_window,
             "timestamp": update_timestamp_iso,
             "age_hours": update_age_hours,
             "author": update["author"],
