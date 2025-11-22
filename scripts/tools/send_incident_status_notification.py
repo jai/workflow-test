@@ -27,17 +27,6 @@ def env_flag(name: str) -> bool:
     return normalized in {"1", "true", "yes", "on", "y"}
 
 
-args = parse_args()
-webhook = os.environ.get("WEBHOOK_URL")
-if not webhook:
-    print("Google Chat webhook not configured; skipping notification.")
-    raise SystemExit(0)
-
-include_passing = args.include_passing or env_flag("INCLUDE_PASSING")
-
-data = json.loads(Path(os.environ["INCIDENT_DATA_PATH"]).read_text())
-decisions = json.loads(Path(os.environ["DECISIONS_PATH"]).read_text())
-incident_map = {item["incident_id"]: item for item in data.get("incidents", [])}
 SEVERITY_ICONS = {"Critical": "🔴", "Major": "🟠", "Minor": "🟡"}
 
 def fmt_text(value: str) -> str:
@@ -45,6 +34,16 @@ def fmt_text(value: str) -> str:
         return "No status text provided"
     collapsed = " ".join(value.split())
     return html.escape(collapsed)
+
+
+def is_failure(decision: dict) -> bool:
+    if decision.get("overallStatus") == "fail":
+        return True
+    if decision.get("summaryAdequate") is False:
+        return True
+    if decision.get("nextStepsAdequate") is False:
+        return True
+    return False
 
 
 def relative_time(iso_ts: str) -> str:
@@ -72,17 +71,21 @@ def relative_time(iso_ts: str) -> str:
     weeks = days // 7
     return f"{weeks}w ago"
 
-pass_count = sum(1 for d in decisions if d.get("overallStatus") == "pass")
-failures = []
-passes = []
-for decision in decisions:
-    inc = incident_map.get(decision["incident_id"])
-    if not inc:
-        continue
-    if decision.get("overallStatus") == "fail":
-        failures.append((inc, decision))
-    elif include_passing:
-        passes.append((inc, decision))
+def split_decisions(decisions, incident_map, include_passing):
+    failures = []
+    passes = []
+    for decision in decisions:
+        inc = incident_map.get(decision.get("incident_id"))
+        if not inc:
+            continue
+        if is_failure(decision):
+            failures.append((inc, decision))
+        elif include_passing:
+            passes.append((inc, decision))
+
+    fail_count = sum(1 for d in decisions if is_failure(d))
+    pass_count = len(decisions) - fail_count
+    return pass_count, failures, passes
 
 def build_preview(status):
     preview_source = status.get("text") or ""
@@ -155,40 +158,63 @@ def build_pass_sections(pass_items):
 
     return sections
 
-summary_lines = [
-    f"📊 <b>Incidents evaluated:</b> {len(decisions)}",
-    f"✅ <b>Passing:</b> {pass_count}",
-    f"🚧 <b>Needs attention:</b> {len(failures)}",
-]
-main_sections = [{"widgets": [{"textParagraph": {"text": "<br>".join(summary_lines)}}]}]
-main_sections.append({"widgets": [{"textParagraph": {"text": " "}}]})
-if failures:
-    for idx, (inc, decision) in enumerate(failures, start=1):
-        main_sections.append(build_failure_section(inc, decision, idx))
-else:
-    main_sections.append({"widgets": [{"textParagraph": {"text": "✅ All incidents with status updates meet the requirements."}}]})
+def build_payload(decisions, incident_map, include_passing):
+    pass_count, failures, passes = split_decisions(decisions, incident_map, include_passing)
 
-if include_passing:
-    pass_sections = build_pass_sections(passes)
-    if pass_sections:
-        pass_sections[0]["header"] = "Passing incidents"
-        main_sections.extend(pass_sections)
-    else:
-        main_sections.append({"widgets": [{"textParagraph": {"text": "ℹ️ Passing incidents requested, but none to display."}}]})
-
-payload = {
-    "cards": [
-        {
-            "header": {
-                "title": "Incident status quality check",
-                "subtitle": "Claude incident status audit",
-            },
-            "sections": main_sections,
-        }
+    summary_lines = [
+        f"📊 <b>Incidents evaluated:</b> {len(decisions)}",
+        f"✅ <b>Passing:</b> {pass_count}",
+        f"🚧 <b>Needs attention:</b> {len(failures)}",
     ]
-}
+    main_sections = [{"widgets": [{"textParagraph": {"text": "<br>".join(summary_lines)}}]}]
+    main_sections.append({"widgets": [{"textParagraph": {"text": " "}}]})
+    if failures:
+        for idx, (inc, decision) in enumerate(failures, start=1):
+            main_sections.append(build_failure_section(inc, decision, idx))
+    else:
+        main_sections.append({"widgets": [{"textParagraph": {"text": "✅ All incidents with status updates meet the requirements."}}]})
 
-resp = requests.post(webhook, json=payload, timeout=20)
-if resp.status_code >= 300:
-    raise SystemExit(f"Chat webhook failed: {resp.status_code} {resp.text}")
-print("Posted results to Google Chat.")
+    if include_passing:
+        pass_sections = build_pass_sections(passes)
+        if pass_sections:
+            pass_sections[0]["header"] = "Passing incidents"
+            main_sections.extend(pass_sections)
+        else:
+            main_sections.append({"widgets": [{"textParagraph": {"text": "ℹ️ Passing incidents requested, but none to display."}}]})
+
+    payload = {
+        "cards": [
+            {
+                "header": {
+                    "title": "Incident status quality check",
+                    "subtitle": "Claude incident status audit",
+                },
+                "sections": main_sections,
+            }
+        ]
+    }
+    return payload
+
+
+def main():
+    args = parse_args()
+    webhook = os.environ.get("WEBHOOK_URL")
+    if not webhook:
+        print("Google Chat webhook not configured; skipping notification.")
+        raise SystemExit(0)
+
+    include_passing = args.include_passing or env_flag("INCLUDE_PASSING")
+
+    data = json.loads(Path(os.environ["INCIDENT_DATA_PATH"]).read_text())
+    decisions = json.loads(Path(os.environ["DECISIONS_PATH"]).read_text())
+    incident_map = {item["incident_id"]: item for item in data.get("incidents", [])}
+
+    payload = build_payload(decisions, incident_map, include_passing)
+    resp = requests.post(webhook, json=payload, timeout=20)
+    if resp.status_code >= 300:
+        raise SystemExit(f"Chat webhook failed: {resp.status_code} {resp.text}")
+    print("Posted results to Google Chat.")
+
+
+if __name__ == "__main__":
+    main()
