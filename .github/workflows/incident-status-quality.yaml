@@ -99,6 +99,7 @@ jobs:
             (provided as JSON below) satisfies two requirements:
             1. Summarizes what has happened so far in the incident.
             2. Outlines clear next steps or owner follow-up actions.
+            3. If a ticket/issue is referenced, ensure a hyperlink/URL is provided; missing links are a fail.
 
             Context:
             - Consider the look-back window (last ${{ env.WINDOW_HOURS }}h); timestamps are
@@ -127,7 +128,8 @@ jobs:
             Rules:
             - Use lowercase true/false for booleans.
             - Set overallStatus to "fail" whenever either summaryAdequate or nextStepsAdequate is false.
-            - Include at least one short note when overallStatus is "fail".
+            - Include at least one short note for every incident, explaining why it passed or failed.
+            - Treat references to tickets/issues without hyperlinks/URLs as a failure and mention the missing link in notes.
             - Do not include extra commentary before or after the STATUS_DECISIONS line.
           claude_args: |
             --model claude-sonnet-4-5-20250929
