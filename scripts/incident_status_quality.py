@@ -70,16 +70,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--token", help="Grafana token (or set GRAFANA_TOKEN / GRAFANA_SERVICE_ACCOUNT_TOKEN)")
     parser.add_argument("--url", help="Grafana base URL (or set GRAFANA_URL)")
     parser.add_argument(
-        "--window-hours",
-        type=int,
-        default=24,
-        help="Look-back window in hours for modified incidents (default: 24). Ignored when --window-minutes is provided.",
-    )
-    parser.add_argument(
         "--window-minutes",
         type=int,
-        default=0,
-        help="Optional look-back window in minutes; when set, overrides --window-hours",
+        default=1440,
+        help="Look-back window in minutes (default: 1440 = 24 hours)",
+    )
+    parser.add_argument(
+        "--align-minute-window",
+        action="store_true",
+        help="Floor the window end to the nearest --window-minutes bucket (default: disabled)",
     )
     parser.add_argument(
         "--max-incidents",
@@ -468,9 +467,8 @@ def main() -> None:
     client = GrafanaIRMClient(base_url, token, rate_limit_handler=rate_limiter, debug=args.debug)
 
     now = datetime.now(timezone.utc)
-    window_minutes = args.window_minutes if args.window_minutes > 0 else args.window_hours * 60
-    window_minutes = max(1, window_minutes)
-    align_to_bucket = args.window_minutes > 0
+    window_minutes = max(1, args.window_minutes)
+    align_to_bucket = args.align_minute_window
     window_start, window_end = compute_window_bounds(now, window_minutes, align_to_bucket)
     window_hours = round(window_minutes / 60.0, 4)
 

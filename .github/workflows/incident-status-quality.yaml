@@ -24,8 +24,8 @@ jobs:
        contains(github.event.comment.body, '/run incident-status-quality'))
     runs-on: ubuntu-latest
     env:
-      WINDOW_HOURS: ${{ vars.INCIDENT_STATUS_WINDOW_HOURS || '24' }}
-      WINDOW_MINUTES: ${{ vars.INCIDENT_STATUS_WINDOW_MINUTES || '10' }}
+      WINDOW_MINUTES: ${{ vars.INCIDENT_STATUS_WINDOW_MINUTES || '1440' }}
+      ALIGN_MINUTE_WINDOW: ${{ vars.INCIDENT_STATUS_ALIGN_WINDOW || 'false' }}
       MAX_INCIDENTS: ${{ vars.INCIDENT_STATUS_MAX_INCIDENTS || '' }}
       INCLUDE_PASSING: ${{ vars.INCIDENT_STATUS_INCLUDE_PASSING || 'true' }}
       INCIDENT_DATA_PATH: incident-status-data.json
@@ -67,13 +67,13 @@ jobs:
         run: |
           set -euo pipefail
           ARGS=(
-            --window-hours "$WINDOW_HOURS"
+            --window-minutes "$WINDOW_MINUTES"
             --output-json "$INCIDENT_DATA_PATH"
             --prompt-output "$INCIDENT_PROMPT_PATH"
             --cache-dir "scripts/.cache/incidents"
           )
-          if [[ -n "${WINDOW_MINUTES}" ]]; then
-            ARGS+=(--window-minutes "$WINDOW_MINUTES")
+          if [[ "${ALIGN_MINUTE_WINDOW}" == 'true' ]]; then
+            ARGS+=(--align-minute-window)
           fi
           if [[ -n "${MAX_INCIDENTS}" ]]; then
             ARGS+=(--max-incidents "$MAX_INCIDENTS")
@@ -116,7 +116,7 @@ jobs:
             3. If a ticket/issue is referenced, ensure a hyperlink/URL is provided; missing links are a fail.
 
             Context:
-            - Consider the look-back window (last ${{ env.WINDOW_HOURS }}h); timestamps are
+            - Consider the look-back window (last ${{ env.WINDOW_MINUTES }} minutes); timestamps are
               included for context only.
             - The dataset only includes incidents with at least one human-authored status update.
             - If the text is truncated, base your decision on the truncated excerpt and
