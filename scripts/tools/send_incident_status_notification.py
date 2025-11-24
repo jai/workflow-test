@@ -100,6 +100,18 @@ def build_preview(status):
     collapsed_preview = " ".join(preview_source.split())
     return collapsed_preview
 
+def format_analysis_block(decision, summary_flag, next_flag):
+    notes = decision.get("notes") or []
+    summary_text = html.escape(notes[0]) if notes else "No summary commentary provided."
+    next_text = html.escape(notes[1]) if len(notes) > 1 else "No next-steps commentary provided."
+    extra = [html.escape(note) for note in notes[2:]]
+
+    lines = [
+        f"🤖 <b>AI Analysis:</b> summary {summary_flag} — {summary_text}",
+        f"↪ <b>Next steps:</b> {next_flag} — {next_text}",
+    ]
+    lines.extend(extra)
+    return "<br>".join(lines)
 
 def build_failure_section(inc, decision, idx):
     status = inc.get("status_update") or {}
@@ -124,15 +136,9 @@ def build_failure_section(inc, decision, idx):
         status_line += f" <a href=\"{url}\">↗</a>"
 
     actor_line = f"👤 {html.escape(author)} • {rel_time}"
-    notes = decision.get("notes") or []
-    if notes:
-        reason = "<br>".join(html.escape(note) for note in notes)
-    else:
-        reason = "No additional commentary."
+    analysis_block = format_analysis_block(decision, summary_flag, next_flag)
 
-    analysis_line = f"🧪 <b>Analysis:</b> summary {summary_flag} | next steps {next_flag}"
-
-    text = "<br>".join([header_line, "", status_line, actor_line, "", analysis_line, reason])
+    text = "<br>".join([header_line, "", status_line, actor_line, "", analysis_block])
     return {"widgets": [{"textParagraph": {"text": text}}]}
 
 
@@ -156,14 +162,9 @@ def build_pass_sections(pass_items):
 
         summary_flag = "✅" if decision.get("summaryAdequate") else "❌"
         next_flag = "✅" if decision.get("nextStepsAdequate") else "❌"
-        analysis_line = f"🧪 <b>Analysis:</b> summary {summary_flag} | next steps {next_flag}"
-        notes = decision.get("notes") or []
-        if notes:
-            reason = "<br>".join(html.escape(note) for note in notes)
-        else:
-            reason = "No additional commentary."
+        analysis_block = format_analysis_block(decision, summary_flag, next_flag)
 
-        text = "<br>".join([f"{sev_icon} <b>{title}</b>", "", status_line, actor_line, "", analysis_line, reason])
+        text = "<br>".join([f"{sev_icon} <b>{title}</b>", "", status_line, actor_line, "", analysis_block])
         sections.append({"widgets": [{"textParagraph": {"text": text}}]})
 
     return sections

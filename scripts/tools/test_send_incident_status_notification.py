@@ -22,6 +22,16 @@ class TestNotificationHelpers(unittest.TestCase):
         empty_preview = notif.build_preview({})
         self.assertEqual(empty_preview, "")
 
+    def test_format_analysis_block_renders_lines(self):
+        decision = {"notes": ["Summary detail", "Next step detail", "Extra context"]}
+        block = notif.format_analysis_block(decision, "✅", "❌")
+        self.assertIn("AI Analysis", block)
+        self.assertIn("Summary detail", block)
+        self.assertIn("Next step detail", block)
+        self.assertIn("Extra context", block)
+        self.assertIn("✅", block)
+        self.assertIn("❌", block)
+
 
 if __name__ == "__main__":
     unittest.main()
