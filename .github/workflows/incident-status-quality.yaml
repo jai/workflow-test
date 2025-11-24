@@ -25,7 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       WINDOW_HOURS: ${{ vars.INCIDENT_STATUS_WINDOW_HOURS || '24' }}
-      WINDOW_MINUTES: ${{ vars.INCIDENT_STATUS_WINDOW_MINUTES || '' }}
+      WINDOW_MINUTES: ${{ vars.INCIDENT_STATUS_WINDOW_MINUTES || '10' }}
       MAX_INCIDENTS: ${{ vars.INCIDENT_STATUS_MAX_INCIDENTS || '' }}
       INCLUDE_PASSING: ${{ vars.INCIDENT_STATUS_INCLUDE_PASSING || 'true' }}
       INCIDENT_DATA_PATH: incident-status-data.json
@@ -110,6 +110,8 @@ jobs:
                  entry while remaining consistent with that narrative.
                - If the historical updates do NOT cover what happened and the impact, the
                  current/latest update must include that context.
+               - Attaching raw logs or screenshots without explaining them is insufficient;
+                 responders must use their own words to describe the situation.
             2. Outlines clear next steps or owner follow-up actions.
             3. If a ticket/issue is referenced, ensure a hyperlink/URL is provided; missing links are a fail.
 
