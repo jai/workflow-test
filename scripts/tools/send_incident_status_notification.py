@@ -125,7 +125,10 @@ def build_failure_section(inc, decision, idx):
 
     actor_line = f"👤 {html.escape(author)} • {rel_time}"
     notes = decision.get("notes") or []
-    reason = html.escape(" ".join(notes)) if notes else "No additional commentary."
+    if notes:
+        reason = "<br>".join(html.escape(note) for note in notes)
+    else:
+        reason = "No additional commentary."
 
     analysis_line = f"🧪 <b>Analysis:</b> summary {summary_flag} | next steps {next_flag}"
 
@@ -155,7 +158,10 @@ def build_pass_sections(pass_items):
         next_flag = "✅" if decision.get("nextStepsAdequate") else "❌"
         analysis_line = f"🧪 <b>Analysis:</b> summary {summary_flag} | next steps {next_flag}"
         notes = decision.get("notes") or []
-        reason = html.escape(" ".join(notes)) if notes else "No additional commentary."
+        if notes:
+            reason = "<br>".join(html.escape(note) for note in notes)
+        else:
+            reason = "No additional commentary."
 
         text = "<br>".join([f"{sev_icon} <b>{title}</b>", "", status_line, actor_line, "", analysis_line, reason])
         sections.append({"widgets": [{"textParagraph": {"text": text}}]})
