@@ -335,6 +335,9 @@ def build_records(
         update_timestamp_iso = update["timestamp"].astimezone(timezone.utc).isoformat()
         update_age_hours = round((now - update["timestamp"]).total_seconds() / 3600, 2)
         within_window = window_start <= update["timestamp"] < window_end
+        if not within_window:
+            # Skip incidents whose freshest human status predates the look-back window.
+            continue
         update_text_prompt, truncated = truncate_text(clean_text)
 
         status_update = {
