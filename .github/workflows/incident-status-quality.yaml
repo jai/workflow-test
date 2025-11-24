@@ -2,9 +2,6 @@
 name: Incident Status Quality
 
 on:
-  schedule:
-    # Every 10 minutes to evaluate the previously completed window
-    - cron: "*/10 * * * *"
   # yamllint disable-line rule:empty-values
   workflow_dispatch:
   issue_comment:
