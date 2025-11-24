@@ -294,6 +294,43 @@ def incident_metadata(
     }
 
 
+def extract_all_human_updates(
+    items: List[Dict[str, Any]]
+) -> List[Dict[str, Any]]:
+    updates: List[Dict[str, Any]] = []
+    for item in items:
+        user = item.get("user") or item.get("createdBy") or {}
+        if not is_human_user(user):
+            continue
+        raw_time = item.get("eventTime") or item.get("createdTime") or item.get("timestamp")
+        if not raw_time:
+            continue
+        parsed_time = parse_timestamp(raw_time)
+        if not parsed_time:
+            continue
+        kind = item.get("activityKind") or item.get("eventType")
+        content = (item.get("body") or item.get("text") or "").strip()
+        if not is_textual_update(kind, content):
+            continue
+        clean_text = clean_status_text(content)
+        if not clean_text:
+            continue
+        updates.append(
+            {
+                "timestamp_raw": raw_time,
+                "timestamp": parsed_time,
+                "text": clean_text,
+                "activity_kind": kind,
+                "author": {
+                    "name": user.get("name"),
+                    "email": user.get("email"),
+                    "username": user.get("login") or user.get("username"),
+                },
+            }
+        )
+    return updates
+
+
 def build_records(
     incidents: List[Dict[str, Any]],
     client: GrafanaIRMClient,
@@ -323,10 +360,11 @@ def build_records(
         modified_time = metadata["modified_time"]
 
         items = load_activity_items(client, disk_cache, incident_id, modified_time, debug=debug)
-        update = extract_latest_human_update(items)
-
-        if not update:
+        updates = extract_all_human_updates(items)
+        if not updates:
             continue
+        updates.sort(key=lambda entry: entry["timestamp"], reverse=True)
+        update = updates[0]
 
         clean_text = clean_status_text(update["text"])
         if not clean_text:
@@ -352,6 +390,21 @@ def build_records(
             "text_truncated": truncated,
         }
 
+        all_updates_payload = []
+        for entry in updates:
+            entry_timestamp_iso = entry["timestamp"].astimezone(timezone.utc).isoformat()
+            entry_text_prompt, entry_truncated = truncate_text(entry["text"])
+            all_updates_payload.append(
+                {
+                    "timestamp": entry_timestamp_iso,
+                    "author_display": format_author(entry["author"]),
+                    "activity_kind": entry["activity_kind"],
+                    "text": entry["text"],
+                    "text_prompt": entry_text_prompt,
+                    "text_truncated": entry_truncated,
+                }
+            )
+
         record = {
             **metadata,
             "window_hours": window_hours,
@@ -359,6 +412,7 @@ def build_records(
             "window_start": window_start.astimezone(timezone.utc).isoformat(),
             "window_end": window_end.astimezone(timezone.utc).isoformat(),
             "status_update": status_update,
+            "status_updates": all_updates_payload,
         }
         records.append(record)
 
@@ -369,6 +423,7 @@ def prepare_prompt_payload(records: List[Dict[str, Any]]) -> Dict[str, Any]:
     prompt_incidents = []
     for record in records:
         status_update = record["status_update"]
+        status_updates = record.get("status_updates", [])
         prompt_incidents.append(
             {
                 "incident_id": record["incident_id"],
@@ -386,6 +441,7 @@ def prepare_prompt_payload(records: List[Dict[str, Any]]) -> Dict[str, Any]:
                 "status_update_kind": status_update.get("activity_kind"),
                 "status_update_text": status_update.get("text_prompt"),
                 "status_update_truncated": status_update.get("text_truncated"),
+                "all_status_updates": status_updates,
             }
         )
 
