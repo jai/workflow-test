@@ -41,6 +41,28 @@ DEFAULT_PROMPT_JSON = "incident-status-prompt.json"
 MAX_STATUS_CHARS = 1800
 
 
+def compute_window_bounds(now: datetime, window_minutes: int, align_to_bucket: bool) -> Tuple[datetime, datetime]:
+    """Compute the window start/end timestamps.
+
+    When align_to_bucket is True the window end is floored to the nearest
+    completed window bucket (e.g., previous 10-minute boundary) to avoid
+    execution gaps when the workflow runs slightly late.
+    """
+
+    duration = timedelta(minutes=window_minutes)
+    if align_to_bucket:
+        bucket_seconds = window_minutes * 60
+        # Floor the current time to the bucket size to capture the last fully
+        # completed interval. This guards against late cron starts.
+        aligned_seconds = (int(now.timestamp()) // bucket_seconds) * bucket_seconds
+        window_end = datetime.fromtimestamp(aligned_seconds, tz=timezone.utc)
+    else:
+        window_end = now
+
+    window_start = window_end - duration
+    return window_start, window_end
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Collect recent incidents and latest status updates for Claude evaluation."
@@ -51,7 +73,13 @@ def parse_args() -> argparse.Namespace:
         "--window-hours",
         type=int,
         default=24,
-        help="Look-back window in hours for modified incidents (default: 24)",
+        help="Look-back window in hours for modified incidents (default: 24). Ignored when --window-minutes is provided.",
+    )
+    parser.add_argument(
+        "--window-minutes",
+        type=int,
+        default=0,
+        help="Optional look-back window in minutes; when set, overrides --window-hours",
     )
     parser.add_argument(
         "--max-incidents",
@@ -272,7 +300,9 @@ def build_records(
     disk_cache: DiskCache,
     base_url: str,
     window_start: datetime,
-    window_hours: int,
+    window_end: datetime,
+    window_hours: float,
+    window_minutes: int,
     debug: bool = False,
 ) -> List[Dict[str, Any]]:
     records: List[Dict[str, Any]] = []
@@ -304,11 +334,10 @@ def build_records(
 
         update_timestamp_iso = update["timestamp"].astimezone(timezone.utc).isoformat()
         update_age_hours = round((now - update["timestamp"]).total_seconds() / 3600, 2)
-        within_window = update["timestamp"] >= window_start
+        within_window = window_start <= update["timestamp"] < window_end
         update_text_prompt, truncated = truncate_text(clean_text)
 
         status_update = {
-            "missing": False,
             "within_window": within_window,
             "timestamp": update_timestamp_iso,
             "age_hours": update_age_hours,
@@ -323,7 +352,9 @@ def build_records(
         record = {
             **metadata,
             "window_hours": window_hours,
+            "window_minutes": window_minutes,
             "window_start": window_start.astimezone(timezone.utc).isoformat(),
+            "window_end": window_end.astimezone(timezone.utc).isoformat(),
             "status_update": status_update,
         }
         records.append(record)
@@ -345,7 +376,6 @@ def prepare_prompt_payload(records: List[Dict[str, Any]]) -> Dict[str, Any]:
                 "has_assignee": record.get("has_assignee"),
                 "teams": record.get("teams"),
                 "grafana_url": record["overview_url"],
-                "status_update_missing": status_update["missing"],
                 "status_update_within_window": status_update["within_window"],
                 "status_update_timestamp": status_update["timestamp"],
                 "status_update_age_hours": status_update["age_hours"],
@@ -379,12 +409,15 @@ def main() -> None:
     client = GrafanaIRMClient(base_url, token, rate_limit_handler=rate_limiter, debug=args.debug)
 
     now = datetime.now(timezone.utc)
-    window_hours = max(1, args.window_hours)
-    window_start = now - timedelta(hours=window_hours)
+    window_minutes = args.window_minutes if args.window_minutes > 0 else args.window_hours * 60
+    window_minutes = max(1, window_minutes)
+    align_to_bucket = args.window_minutes > 0
+    window_start, window_end = compute_window_bounds(now, window_minutes, align_to_bucket)
+    window_hours = round(window_minutes / 60.0, 4)
 
     params = {
         "dateFrom": window_start.isoformat(),
-        "dateTo": now.isoformat(),
+        "dateTo": window_end.isoformat(),
     }
 
     incidents: List[Dict[str, Any]] = []
@@ -407,7 +440,7 @@ def main() -> None:
         modified_dt = parse_timestamp(modified_raw) if modified_raw else None
         if not modified_dt:
             continue
-        if modified_dt < window_start:
+        if modified_dt < window_start or modified_dt >= window_end:
             continue
         filtered.append((incident, modified_dt))
 
@@ -418,8 +451,8 @@ def main() -> None:
     filtered_incidents = [item[0] for item in filtered]
 
     print(
-        f"📈 Window start: {window_start.isoformat()} — found {len(filtered_incidents)} incidents "
-        f"updated in last {window_hours}h"
+        f"📈 Window: {window_start.isoformat()} → {window_end.isoformat()} "
+        f"({window_minutes}m) — found {len(filtered_incidents)} incidents"
     )
 
     records = build_records(
@@ -428,14 +461,18 @@ def main() -> None:
         disk_cache=disk_cache,
         base_url=base_url,
         window_start=window_start,
+        window_end=window_end,
         window_hours=window_hours,
+        window_minutes=window_minutes,
         debug=args.debug,
     )
 
     raw_payload = {
         "generated_at": now.isoformat(),
         "window_hours": window_hours,
+        "window_minutes": window_minutes,
         "window_start": window_start.isoformat(),
+        "window_end": window_end.isoformat(),
         "incident_count": len(records),
         "incidents": records,
     }
@@ -448,9 +485,8 @@ def main() -> None:
     print(f"📝 Wrote prompt payload to {args.prompt_output}")
 
     if args.debug:
-        missing = sum(1 for rec in records if rec["status_update"]["missing"])
         stale = sum(1 for rec in records if not rec["status_update"]["within_window"])
-        print(f"🔍 Debug: {missing} incidents missing human updates; {stale} newest updates outside window")
+        print(f"🔍 Debug: {stale} newest updates outside window")
 
 
 if __name__ == "__main__":

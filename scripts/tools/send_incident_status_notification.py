@@ -13,16 +13,24 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Send incident status quality Chat card")
     parser.add_argument(
         "--include-passing",
+        dest="include_passing",
         action="store_true",
-        help="Include passing incidents in the Chat card (also set INCLUDE_PASSING env)",
+        help="Include passing incidents in the Chat card",
     )
+    parser.add_argument(
+        "--exclude-passing",
+        dest="include_passing",
+        action="store_false",
+        help="Exclude passing incidents from the Chat card",
+    )
+    parser.set_defaults(include_passing=None)
     return parser.parse_args()
 
 
-def env_flag(name: str) -> bool:
+def env_flag(name: str, default: bool = False) -> bool:
     value = os.environ.get(name)
     if value is None:
-        return False
+        return default
     normalized = value.strip().lower()
     return normalized in {"1", "true", "yes", "on", "y"}
 
@@ -90,9 +98,7 @@ def split_decisions(decisions, incident_map, include_passing):
 def build_preview(status):
     preview_source = status.get("text") or ""
     collapsed_preview = " ".join(preview_source.split())
-    max_len = 160
-    preview = collapsed_preview[:max_len] + ("…" if len(collapsed_preview) > max_len else "")
-    return preview if preview else ""
+    return collapsed_preview
 
 
 def build_failure_section(inc, decision, idx):
@@ -162,7 +168,7 @@ def build_payload(decisions, incident_map, include_passing):
     summary_lines = [
         f"📊 <b>Incidents evaluated:</b> {len(decisions)}",
         f"✅ <b>Passing:</b> {pass_count}",
-        f"🚧 <b>Needs attention:</b> {len(failures)}",
+        f"⚠️ <b>Needs attention:</b> {len(failures)}",
     ]
     main_sections = [{"widgets": [{"textParagraph": {"text": "<br>".join(summary_lines)}}]}]
     main_sections.append({"widgets": [{"textParagraph": {"text": " "}}]})
@@ -201,7 +207,9 @@ def main():
         print("Google Chat webhook not configured; skipping notification.")
         raise SystemExit(0)
 
-    include_passing = args.include_passing or env_flag("INCLUDE_PASSING")
+    include_passing = args.include_passing
+    if include_passing is None:
+        include_passing = env_flag("INCLUDE_PASSING", default=True)
 
     data = json.loads(Path(os.environ["INCIDENT_DATA_PATH"]).read_text())
     decisions = json.loads(Path(os.environ["DECISIONS_PATH"]).read_text())

@@ -3,8 +3,8 @@ name: Incident Status Quality
 
 on:
   schedule:
-    # Top of every hour (adjust as needed once validated)
-    - cron: 0 * * * *
+    # Every 10 minutes to evaluate the previously completed window
+    - cron: "*/10 * * * *"
   # yamllint disable-line rule:empty-values
   workflow_dispatch:
   issue_comment:
@@ -25,6 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       WINDOW_HOURS: ${{ vars.INCIDENT_STATUS_WINDOW_HOURS || '24' }}
+      WINDOW_MINUTES: ${{ vars.INCIDENT_STATUS_WINDOW_MINUTES || '10' }}
       MAX_INCIDENTS: ${{ vars.INCIDENT_STATUS_MAX_INCIDENTS || '' }}
       INCLUDE_PASSING: ${{ vars.INCIDENT_STATUS_INCLUDE_PASSING || 'true' }}
       INCIDENT_DATA_PATH: incident-status-data.json
@@ -71,6 +72,9 @@ jobs:
             --prompt-output "$INCIDENT_PROMPT_PATH"
             --cache-dir "scripts/.cache/incidents"
           )
+          if [[ -n "${WINDOW_MINUTES}" ]]; then
+            ARGS+=(--window-minutes "$WINDOW_MINUTES")
+          fi
           if [[ -n "${MAX_INCIDENTS}" ]]; then
             ARGS+=(--max-incidents "$MAX_INCIDENTS")
           fi
@@ -104,7 +108,7 @@ jobs:
             Context:
             - Consider the look-back window (last ${{ env.WINDOW_HOURS }}h); timestamps are
               included for context only.
-            - Treat "status_update_missing": true as an automatic failure.
+            - The dataset only includes incidents with at least one human-authored status update.
             - If the text is truncated, base your decision on the truncated excerpt and
               mention the limitation in notes when uncertain.
 
@@ -129,13 +133,13 @@ jobs:
             - Use lowercase true/false for booleans.
             - Set overallStatus to "fail" whenever either summaryAdequate or nextStepsAdequate is false.
             - Include at least one short note for every incident, explaining why it passed or failed.
-            - Treat references to tickets/issues without hyperlinks/URLs as a failure and mention the missing link in notes.
+            - Treat references to tickets/issues without hyperlinks/URLs as a failure
+              and mention the missing link in notes.
             - Do not include extra commentary before or after the STATUS_DECISIONS line.
           claude_args: |
             --model claude-sonnet-4-5-20250929
             --max-turns 12
             --allowedTools Read
-            --disallowedTools Bash,Grep,TodoWrite,Edit,Write,WebSearch,WebFetch,NotebookEdit
 
       - name: Parse Claude decisions
         id: decisions
@@ -148,7 +152,7 @@ jobs:
         if: steps.dataset.outputs.incident_count != '0'
         env:
           WEBHOOK_URL: ${{ secrets.GOOGLE_CHAT_INCIDENT_STATUS_QUALITY_WEBHOOK_URL }}
-        run: python scripts/tools/send_incident_status_notification.py
+        run: python scripts/tools/send_incident_status_notification.py --include-passing
 
       - name: Collect artifacts
         if: always()

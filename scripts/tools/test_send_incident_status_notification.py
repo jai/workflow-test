@@ -14,6 +14,14 @@ class TestNotificationHelpers(unittest.TestCase):
         decision_fail = {"overallStatus": "fail", "summaryAdequate": True, "nextStepsAdequate": True}
         self.assertTrue(notif.is_failure(decision_fail))
 
+    def test_build_preview_includes_full_text(self):
+        status = {"text": "Line one\nLine two with details"}
+        preview = notif.build_preview(status)
+        self.assertEqual(preview, "Line one Line two with details")
+
+        empty_preview = notif.build_preview({})
+        self.assertEqual(empty_preview, "")
+
 
 if __name__ == "__main__":
     unittest.main()
