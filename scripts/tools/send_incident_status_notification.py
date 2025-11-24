@@ -106,13 +106,14 @@ def format_analysis_block(decision, summary_flag, next_flag):
     next_text = html.escape(notes[1]) if len(notes) > 1 else "No next-steps commentary provided."
     extra = [html.escape(note) for note in notes[2:]]
 
-    lines = [
-        "🤖 <b>AI Analysis:</b>",
-        f"{summary_flag} <b>Summary and impact:</b> {summary_text}",
-        f"{next_flag} <b>Next steps:</b> {next_text}",
-    ]
-    lines.extend(extra)
-    return "<br>".join(lines)
+    block = (
+        "🤖 <b>AI Analysis:</b><br>"
+        f"{summary_flag} <b>Summary and impact:</b> {summary_text}<br>"
+        f"{next_flag} <b>Next steps:</b> {next_text}"
+    )
+    if extra:
+        block += "<br>" + "<br>".join(extra)
+    return block
 
 def build_failure_section(inc, decision, idx):
     status = inc.get("status_update") or {}
