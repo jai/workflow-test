@@ -107,8 +107,9 @@ def format_analysis_block(decision, summary_flag, next_flag):
     extra = [html.escape(note) for note in notes[2:]]
 
     lines = [
-        f"🤖 <b>AI Analysis:</b> summary {summary_flag} — {summary_text}",
-        f"↪ <b>Next steps:</b> {next_flag} — {next_text}",
+        "🤖 <b>AI Analysis:</b>",
+        f"{summary_flag} <b>Summary and impact:</b> {summary_text}",
+        f"{next_flag} <b>Next steps:</b> {next_text}",
     ]
     lines.extend(extra)
     return "<br>".join(lines)
