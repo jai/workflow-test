@@ -22,7 +22,9 @@ permissions:
 jobs:
   growthbook_validation:
     name: Validate GrowthBook Link
-    runs-on: ubuntu-latest
+    runs-on:
+      - self-hosted
+      - local
     env:
       GROWTHBOOK_SKIP_APPROVERS: jai
     continue-on-error: true
