@@ -1,0 +1,212 @@
+# This workflow file is adapted from EWA-Services/EWA-Actions for local testing
+---
+name: GrowthBook Validation
+
+on:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - reopened
+      - synchronize
+  issue_comment:
+    types:
+      - created
+      - edited
+      - deleted
+
+permissions:
+  pull-requests: write
+  issues: write
+
+jobs:
+  growthbook_validation:
+    name: Validate GrowthBook Link
+    runs-on: ubuntu-latest
+    env:
+      GROWTHBOOK_SKIP_APPROVERS: jai
+    continue-on-error: true
+    steps:
+      - name: Check GrowthBook coverage
+        id: validation
+        env:
+          BODY: ${{ github.event.pull_request.body || '' }}
+          PR_TITLE: ${{ github.event.pull_request.title || '' }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login || '' }}
+          PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name || '' }}
+          PR_BASE_REPO: ${{ github.event.pull_request.base.repo.full_name || '' }}
+          PR_HEAD_BRANCH: ${{ github.event.pull_request.head.ref || '' }}
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref || '' }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          COMMENT_BODY: ${{ github.event.comment.body || '' }}
+          COMMENT_AUTHOR: ${{ github.event.comment.user.login || '' }}
+          PR_API_URL: ${{ github.event.issue.pull_request.url || '' }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -o pipefail
+
+          EVENT_NAME="${GITHUB_EVENT_NAME}"
+          COMMENT_AUTHOR="${COMMENT_AUTHOR}"
+          COMMENT_BODY="${COMMENT_BODY}"
+          PR_API_URL="${PR_API_URL}"
+
+          if [[ "$EVENT_NAME" == "issue_comment" ]]; then
+              if [[ -z "$PR_API_URL" ]]; then
+                  echo "🛑 Issue comment is not associated with a pull request. Skipping GrowthBook validation."
+                  exit 0
+              fi
+
+              if [[ "$COMMENT_AUTHOR" == "github-actions[bot]" ]]; then
+                  echo "🤖 Skipping comment from github-actions[bot] to avoid infinite loops."
+                  exit 0
+              fi
+
+              echo "ℹ️ GrowthBook validation triggered by issue comment from $COMMENT_AUTHOR."
+
+              PR_DATA=$(curl -s -H "Authorization: token $GITHUB_TOKEN" "$PR_API_URL")
+
+              if [[ -z "$PR_DATA" || "$PR_DATA" == "Not Found" ]]; then
+                  echo "⚠️ Unable to load pull request details for comment-triggered run."
+                  exit 1
+              fi
+
+              PR_NUMBER=$(echo "$PR_DATA" | jq -r '.number')
+              PR_TITLE=$(echo "$PR_DATA" | jq -r '.title // ""')
+              BODY=$(echo "$PR_DATA" | jq -r '.body // ""')
+              PR_AUTHOR=$(echo "$PR_DATA" | jq -r '.user.login // ""')
+              PR_HEAD_REPO=$(echo "$PR_DATA" | jq -r '.head.repo.full_name // ""')
+              PR_BASE_REPO=$(echo "$PR_DATA" | jq -r '.base.repo.full_name // ""')
+              PR_HEAD_BRANCH=$(echo "$PR_DATA" | jq -r '.head.ref // ""')
+              PR_BASE_REF=$(echo "$PR_DATA" | jq -r '.base.ref // ""')
+
+              if [[ -z "$PR_NUMBER" || "$PR_NUMBER" == "null" ]]; then
+                  echo "⚠️ Could not determine pull request number from API response. Skipping."
+                  exit 1
+              fi
+          fi
+
+          VALIDATION_RESULT="**GrowthBook Validation Report**"$'\n\n'
+          VALIDATION_STATUS="success"
+          OVERRIDE_USER=""
+
+          post_results() {
+              echo "COMMENT_BODY<<EOF" >> $GITHUB_ENV
+              echo "$VALIDATION_RESULT" >> $GITHUB_ENV
+              echo "EOF" >> $GITHUB_ENV
+              echo "COMMENT_READY=true" >> $GITHUB_ENV
+          }
+
+          should_allow_growthbook_override() {
+              local -a approved_users
+              read -ra approved_users <<< "$GROWTHBOOK_SKIP_APPROVERS"
+
+              local comments_json
+              comments_json=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+                "https://api.github.com/repos/$REPOSITORY/issues/$PR_NUMBER/comments")
+
+              for user in "${approved_users[@]}"; do
+                  local override_found
+                  override_found=$(echo "$comments_json" | jq -r --arg login "$user" '
+                    .[]
+                    | select(.user.login == $login and (.body // "" | test("no experiment"; "i")))
+                    | .user.login
+                  ' | head -1)
+
+                  if [[ -n "$override_found" && "$override_found" != "null" ]]; then
+                      OVERRIDE_USER="$override_found"
+                      return 0
+                  fi
+              done
+              return 1
+          }
+
+          if [[ "$PR_AUTHOR" == "finn-devops" ]]; then
+              echo "🤖 Skipping GrowthBook link check for automation account: $PR_AUTHOR"
+              VALIDATION_RESULT+="🤖 GrowthBook link check skipped for automation account"$'\n'
+              post_results
+              exit 0
+          fi
+
+          VALIDATION_RESULT+="**Validation Results:**"$'\n\n'
+
+          echo "🔍 Checking for GrowthBook feature or experiment link in PR description"
+          GROWTHBOOK_PATTERN='https://app\.growthbook\.io/(features|experiment)/[A-Za-z0-9._-]+'
+          GROWTHBOOK_LINK=""
+
+          if [[ "$BODY" =~ $GROWTHBOOK_PATTERN ]]; then
+              GROWTHBOOK_LINK="${BASH_REMATCH[0]}"
+          fi
+
+          if should_allow_growthbook_override; then
+              echo "✅ GrowthBook link requirement satisfied via approved 'no experiment' declaration by $OVERRIDE_USER."
+              VALIDATION_RESULT+="✅ **GrowthBook Coverage:** No experiment (approved override by $OVERRIDE_USER)"$'\n'
+          elif [[ -n "$GROWTHBOOK_LINK" ]]; then
+              echo "✅ GrowthBook link found: $GROWTHBOOK_LINK"
+              VALIDATION_RESULT+="✅ **GrowthBook Coverage:** Link found ($GROWTHBOOK_LINK)"$'\n'
+          else
+              echo "❌ Missing GrowthBook feature flag or experiment link."
+              VALIDATION_RESULT+="❌ **GrowthBook Coverage:** Missing GrowthBook feature flag"$'\n'
+              VALIDATION_RESULT+="   or experiment link"$'\n'
+              VALIDATION_RESULT+="   Expected formats: https://app.growthbook.io/features/... or"$'\n'
+              VALIDATION_RESULT+="   https://app.growthbook.io/experiment/..."$'\n'
+              VALIDATION_STATUS="failure"
+          fi
+
+          if [[ "$VALIDATION_STATUS" == "failure" ]]; then
+              VALIDATION_RESULT+=$'\n---\n'
+              VALIDATION_RESULT+="⚠️ **Action Required:**"$'\n'
+              VALIDATION_RESULT+="- Add a GrowthBook feature flag or experiment link"$'\n'
+              VALIDATION_RESULT+="  (or comment \"no experiment\" if exempt)"$'\n'
+          else
+              VALIDATION_RESULT+=$'\n---\n'
+              VALIDATION_RESULT+="✅ **GrowthBook validation passed!**"$'\n'
+          fi
+
+          post_results
+
+          if [[ "$VALIDATION_STATUS" == "failure" ]]; then
+              exit 1
+          fi
+
+      - name: Post GrowthBook Validation Results
+        if: env.COMMENT_READY == 'true'
+        uses: actions/github-script@v7
+        env:
+          COMMENT_BODY: ${{ env.COMMENT_BODY }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const issueNumber = context.payload.pull_request?.number ?? context.payload.issue?.number;
+
+            if (!issueNumber) {
+              throw new Error('Unable to determine pull request number for comment update.');
+            }
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+            });
+
+            const existingComment = comments.find(comment =>
+              comment.user.login === 'github-actions[bot]' &&
+              comment.body.includes('**GrowthBook Validation Report**')
+            );
+
+            if (existingComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existingComment.id,
+                body: process.env.COMMENT_BODY
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                body: process.env.COMMENT_BODY
+              });
+            }
