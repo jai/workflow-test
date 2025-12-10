@@ -39,6 +39,7 @@ jobs:
           PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name || '' }}
           PR_BASE_REPO: ${{ github.event.pull_request.base.repo.full_name || '' }}
           PR_HEAD_BRANCH: ${{ github.event.pull_request.head.ref || '' }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
           PR_BASE_REF: ${{ github.event.pull_request.base.ref || '' }}
           PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
@@ -81,6 +82,7 @@ jobs:
               PR_HEAD_REPO=$(echo "$PR_DATA" | jq -r '.head.repo.full_name // ""')
               PR_BASE_REPO=$(echo "$PR_DATA" | jq -r '.base.repo.full_name // ""')
               PR_HEAD_BRANCH=$(echo "$PR_DATA" | jq -r '.head.ref // ""')
+              PR_HEAD_SHA=$(echo "$PR_DATA" | jq -r '.head.sha // ""')
               PR_BASE_REF=$(echo "$PR_DATA" | jq -r '.base.ref // ""')
 
               if [[ -z "$PR_NUMBER" || "$PR_NUMBER" == "null" ]]; then
@@ -98,6 +100,33 @@ jobs:
               echo "$VALIDATION_RESULT" >> $GITHUB_ENV
               echo "EOF" >> $GITHUB_ENV
               echo "COMMENT_READY=true" >> $GITHUB_ENV
+          }
+
+          rerun_pull_request_validation() {
+              if [[ -z "$PR_HEAD_SHA" ]]; then
+                  echo "⚠️ Unable to rerun pull request validation because head SHA is missing."
+                  return
+              fi
+
+              local workflow_runs
+              workflow_runs=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+                "https://api.github.com/repos/$REPOSITORY/actions/workflows/growthbook-validation.yaml/runs?branch=$PR_HEAD_BRANCH&event=pull_request&per_page=50")
+
+              local run_id
+              run_id=$(echo "$workflow_runs" | jq -r --arg sha "$PR_HEAD_SHA" '
+                .workflow_runs[]
+                | select(.head_sha == $sha)
+                | .id
+              ' | head -1)
+
+              if [[ -z "$run_id" || "$run_id" == "null" ]]; then
+                  echo "⚠️ Could not find a pull_request workflow run for branch $PR_HEAD_BRANCH at $PR_HEAD_SHA."
+                  return
+              fi
+
+              echo "🔁 Triggering rerun for GrowthBook Validation run $run_id on $PR_HEAD_SHA"
+              curl -s -X POST -H "Authorization: token $GITHUB_TOKEN" \
+                "https://api.github.com/repos/$REPOSITORY/actions/runs/$run_id/rerun" > /dev/null
           }
 
           should_allow_growthbook_override() {
@@ -144,6 +173,9 @@ jobs:
           if should_allow_growthbook_override; then
               echo "✅ GrowthBook link requirement satisfied via approved 'no experiment' declaration by $OVERRIDE_USER."
               VALIDATION_RESULT+="✅ **GrowthBook Coverage:** No experiment (approved override by $OVERRIDE_USER)"$'\n'
+              if [[ "$EVENT_NAME" == "issue_comment" ]]; then
+                  rerun_pull_request_validation
+              fi
           elif [[ -n "$GROWTHBOOK_LINK" ]]; then
               echo "✅ GrowthBook link found: $GROWTHBOOK_LINK"
               VALIDATION_RESULT+="✅ **GrowthBook Coverage:** Link found ($GROWTHBOOK_LINK)"$'\n'
